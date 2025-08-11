@@ -1,0 +1,59 @@
+{
+  "name": "nestjs-simple-queue",
+  "version": "1.0.0",
+  "description": "A simple, generic, in-memory task queue service for NestJS",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rimraf dist && tsc",
+    "prepublishOnly": "npm run build",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "clean": "rimraf dist",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "nestjs",
+    "queue",
+    "task",
+    "in-memory",
+    "typescript",
+    "async",
+    "retry",
+    "event-driven"
+  ],
+  "author": "doompy17",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Doompy/nestjs-simple-queue.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Doompy/nestjs-simple-queue/issues"
+  },
+  "homepage": "https://github.com/Doompy/nestjs-simple-queue#readme",
+  "peerDependencies": {
+    "@nestjs/common": "^8.0.0 || ^9.0.0 || ^10.0.0 || ^11.0.0",
+    "@nestjs/event-emitter": "^2.0.0 || ^3.0.0"
+  },
+  "devDependencies": {
+    "@nestjs/common": "^11.1.6",
+    "@nestjs/event-emitter": "^3.0.1",
+    "@nestjs/testing": "^11.1.6",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.2.1",
+    "jest": "^30.0.5",
+    "rimraf": "^6.0.1",
+    "ts-jest": "^29.4.1",
+    "typescript": "^5.9.2"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
