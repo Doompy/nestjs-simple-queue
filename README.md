@@ -5,6 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub stars](https://img.shields.io/github/stars/Doompy/nestjs-simple-queue.svg)](https://github.com/Doompy/nestjs-simple-queue)
 [![GitHub issues](https://img.shields.io/github/issues/Doompy/nestjs-simple-queue.svg)](https://github.com/Doompy/nestjs-simple-queue/issues)
+[![CI/CD Status](https://github.com/Doompy/nestjs-simple-queue/workflows/CI%2FCD%20Pipeline/badge.svg)](https://github.com/Doompy/nestjs-simple-queue/actions)
 
 A simple, generic, in-memory task queue service for NestJS applications. This library provides a lightweight solution for handling asynchronous task processing with retry mechanisms, event emission, and configurable concurrency.
 
@@ -16,6 +17,7 @@ A simple, generic, in-memory task queue service for NestJS applications. This li
 - ⚡ **Concurrent Processing**: Configurable concurrency limits
 - 🎯 **TypeScript Support**: Full TypeScript support with type definitions
 - 🧪 **Well Tested**: Comprehensive test coverage
+- 🔧 **CI/CD Ready**: Automated testing and deployment pipeline
 
 ## Installation
 
@@ -28,8 +30,8 @@ npm install nestjs-simple-queue
 ### 1. Import the Module
 
 ```typescript
-import { Module } from "@nestjs/common";
-import { QueueModule } from "nestjs-simple-queue";
+import { Module } from '@nestjs/common';
+import { QueueModule } from 'nestjs-simple-queue';
 
 @Module({
   imports: [
@@ -44,8 +46,8 @@ export class AppModule {}
 ### 2. Use the Service
 
 ```typescript
-import { Injectable } from "@nestjs/common";
-import { QueueService } from "nestjs-simple-queue";
+import { Injectable } from '@nestjs/common';
+import { QueueService } from 'nestjs-simple-queue';
 
 @Injectable()
 export class TaskService {
@@ -54,7 +56,7 @@ export class TaskService {
   async processTask(data: any) {
     // Enqueue a task with retry options
     await this.queueService.enqueue(
-      "my-queue",
+      'my-queue',
       data,
       async (payload) => {
         // Your task logic here
@@ -69,8 +71,8 @@ export class TaskService {
 ### 3. Listen to Events
 
 ```typescript
-import { Injectable, OnModuleInit } from "@nestjs/common";
-import { EventEmitter2 } from "@nestjs/event-emitter";
+import { Injectable, OnModuleInit } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 @Injectable()
 export class EventListenerService implements OnModuleInit {
@@ -78,18 +80,18 @@ export class EventListenerService implements OnModuleInit {
 
   onModuleInit() {
     // Listen to task success events
-    this.eventEmitter.on("queue.task.success", (event) => {
-      console.log("Task succeeded:", event);
+    this.eventEmitter.on('queue.task.success', (event) => {
+      console.log('Task succeeded:', event);
     });
 
     // Listen to task failure events
-    this.eventEmitter.on("queue.task.failed", (event) => {
-      console.log("Task failed:", event);
+    this.eventEmitter.on('queue.task.failed', (event) => {
+      console.log('Task failed:', event);
     });
 
     // Listen to queue empty events
-    this.eventEmitter.on("queue.empty", (event) => {
-      console.log("Queue is empty:", event);
+    this.eventEmitter.on('queue.empty', (event) => {
+      console.log('Queue is empty:', event);
     });
   }
 }
@@ -133,7 +135,7 @@ The service emits the following events:
 
 ```typescript
 // Simple task processing
-await this.queueService.enqueue("email-queue", emailData, async (data) => {
+await this.queueService.enqueue('email-queue', emailData, async (data) => {
   await this.emailService.send(data);
 });
 ```
@@ -143,7 +145,7 @@ await this.queueService.enqueue("email-queue", emailData, async (data) => {
 ```typescript
 // Task with retry attempts
 await this.queueService.enqueue(
-  "api-queue",
+  'api-queue',
   apiData,
   async (data) => {
     await this.externalApi.call(data);
@@ -157,11 +159,11 @@ await this.queueService.enqueue(
 ```typescript
 // Different queues for different types of tasks
 await this.queueService.enqueue(
-  "image-processing",
+  'image-processing',
   imageData,
   this.processImage
 );
-await this.queueService.enqueue("data-sync", syncData, this.syncData);
+await this.queueService.enqueue('data-sync', syncData, this.syncData);
 ```
 
 ## Testing
