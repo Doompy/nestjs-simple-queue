@@ -49,11 +49,18 @@ export class QueueService {
 
     if (!queue) return;
 
+    // 동시성 제한을 체크하면서 작업을 실행
     while (queue.length > 0 && active < this.concurrency) {
       const task = queue.shift();
       if (!task) continue;
 
       this.runTask(queueName, task);
+
+      // activeTasks가 업데이트되었으므로 다시 체크
+      const currentActive = this.activeTasks.get(queueName) || 0;
+      if (currentActive >= this.concurrency) {
+        break;
+      }
     }
   }
 
