@@ -1,12 +1,12 @@
-import { Test, TestingModule } from "@nestjs/testing";
-import { EventEmitter2, EventEmitterModule } from "@nestjs/event-emitter";
-import { QueueService } from "./queue.service";
-import { QueueModule } from "./queue.module";
+import { Test, TestingModule } from '@nestjs/testing';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { QueueService } from './queue.service';
+import { QueueModule } from './queue.module';
 
 // --- 테스트 최상위 그룹 ---
-describe("QueueService", () => {
+describe('QueueService', () => {
   // --- 동시성과 크게 관계 없는 일반적인 테스트들 ---
-  describe("General Functionality", () => {
+  describe('General Functionality', () => {
     let service: QueueService;
     let eventEmitter: EventEmitter2;
     let emitSpy: jest.SpyInstance;
@@ -18,7 +18,7 @@ describe("QueueService", () => {
 
       service = module.get<QueueService>(QueueService);
       eventEmitter = module.get<EventEmitter2>(EventEmitter2);
-      emitSpy = jest.spyOn(eventEmitter, "emit");
+      emitSpy = jest.spyOn(eventEmitter, 'emit');
     });
 
     // 💡 afterEach는 그대로 유지하여 테스트 간섭을 막습니다.
@@ -26,13 +26,13 @@ describe("QueueService", () => {
       eventEmitter.removeAllListeners();
     });
 
-    it("should be defined", () => {
+    it('should be defined', () => {
       expect(service).toBeDefined();
     });
 
-    it("should enqueue a task and process it successfully", async () => {
+    it('should enqueue a task and process it successfully', async () => {
       const mockTaskFunction = jest.fn().mockResolvedValue(undefined);
-      const payload = { data: "test-payload" };
+      const payload = { data: 'test-payload' };
 
       // 작업 완료를 기다리는 Promise 생성
       const taskCompleted = new Promise<void>((resolve) => {
@@ -46,20 +46,20 @@ describe("QueueService", () => {
         checkComplete();
       });
 
-      await service.enqueue("test-queue", payload, mockTaskFunction);
+      await service.enqueue('test-queue', payload, mockTaskFunction);
       await taskCompleted;
 
       expect(mockTaskFunction).toHaveBeenCalledTimes(1);
       expect(mockTaskFunction).toHaveBeenCalledWith(payload);
     }, 10000); // 타임아웃을 10초로 증가
 
-    it("should retry a failed task for the specified number of times", async () => {
+    it('should retry a failed task for the specified number of times', async () => {
       const mockTaskFunction = jest
         .fn()
-        .mockRejectedValueOnce(new Error("First failure"))
-        .mockRejectedValueOnce(new Error("Second failure"))
+        .mockRejectedValueOnce(new Error('First failure'))
+        .mockRejectedValueOnce(new Error('Second failure'))
         .mockResolvedValue(undefined);
-      const payload = { data: "retry-test" };
+      const payload = { data: 'retry-test' };
 
       // 모든 재시도가 완료될 때까지 기다리는 Promise
       const retriesCompleted = new Promise<void>((resolve) => {
@@ -75,7 +75,7 @@ describe("QueueService", () => {
 
       // 실패는 예상되므로 catch를 붙여줍니다.
       service
-        .enqueue("retry-queue", payload, mockTaskFunction, {
+        .enqueue('retry-queue', payload, mockTaskFunction, {
           retries: 2,
         })
         .catch(() => {});
@@ -85,10 +85,10 @@ describe("QueueService", () => {
       expect(mockTaskFunction).toHaveBeenCalledTimes(3);
     }, 10000); // 타임아웃을 10초로 증가
 
-    it("should emit a success event when a task is processed successfully", async () => {
+    it('should emit a success event when a task is processed successfully', async () => {
       const mockTaskFunction = jest.fn().mockResolvedValue(undefined);
-      const payload = { data: "success-event-test" };
-      const queueName = "event-success-queue";
+      const payload = { data: 'success-event-test' };
+      const queueName = 'event-success-queue';
 
       // 작업 완료를 기다리는 Promise
       const taskCompleted = new Promise<void>((resolve) => {
@@ -111,7 +111,7 @@ describe("QueueService", () => {
 
       // emitSpy가 호출되었는지 확인 (이벤트 발생 확인)
       expect(emitSpy).toHaveBeenCalledWith(
-        "queue.task.success",
+        'queue.task.success',
         expect.objectContaining({
           queueName,
           task: expect.objectContaining({ payload }),
@@ -119,11 +119,11 @@ describe("QueueService", () => {
       );
     }, 10000); // 타임아웃을 10초로 증가
 
-    it("should emit a failed event when a task fails", async () => {
-      const error = new Error("Task failed deliberately");
+    it('should emit a failed event when a task fails', async () => {
+      const error = new Error('Task failed deliberately');
       const mockTaskFunction = jest.fn().mockRejectedValue(error);
-      const payload = { data: "failure-event-test" };
-      const queueName = "event-fail-queue";
+      const payload = { data: 'failure-event-test' };
+      const queueName = 'event-fail-queue';
 
       // 작업 실패를 기다리는 Promise
       const taskFailed = new Promise<void>((resolve) => {
@@ -146,7 +146,7 @@ describe("QueueService", () => {
 
       // emitSpy가 호출되었는지 확인 (이벤트 발생 확인)
       expect(emitSpy).toHaveBeenCalledWith(
-        "queue.task.failed",
+        'queue.task.failed',
         expect.objectContaining({
           queueName,
           task: expect.objectContaining({ payload }),
@@ -157,7 +157,7 @@ describe("QueueService", () => {
   });
 
   // --- 동시성 > 1 (병렬 처리) 환경에서의 테스트들 ---
-  describe("when concurrency is greater than 1 (Concurrent Processing)", () => {
+  describe('when concurrency is greater than 1 (Concurrent Processing)', () => {
     let service: QueueService;
 
     beforeEach(async () => {
@@ -167,7 +167,7 @@ describe("QueueService", () => {
       service = module.get<QueueService>(QueueService);
     });
 
-    it("should process tasks concurrently up to the concurrency limit", async () => {
+    it('should process tasks concurrently up to the concurrency limit', async () => {
       let currentlyRunning = 0;
       let maxConcurrent = 0;
 
@@ -181,7 +181,7 @@ describe("QueueService", () => {
       const tasks: Promise<void>[] = [];
       for (let i = 0; i < 10; i++) {
         tasks.push(
-          service.enqueue("concurrent-queue", { i }, mockTaskFunction)
+          service.enqueue('concurrent-queue', { i }, mockTaskFunction)
         );
       }
 

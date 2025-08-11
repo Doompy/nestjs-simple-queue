@@ -1,4 +1,4 @@
-import { Logger } from "@nestjs/common";
+import { Logger } from '@nestjs/common';
 
 /**
  * 라이브러리 사용자가 QueueModule.forRoot()를 통해 전달할 옵션

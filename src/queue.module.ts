@@ -1,7 +1,7 @@
-import { Module, DynamicModule } from "@nestjs/common";
-import { EventEmitterModule } from "@nestjs/event-emitter";
-import { QueueService } from "./queue.service";
-import { QueueModuleOptions } from "./queue.interface";
+import { Module, DynamicModule } from '@nestjs/common';
+import { EventEmitterModule } from '@nestjs/event-emitter';
+import { QueueService } from './queue.service';
+import { QueueModuleOptions } from './queue.interface';
 
 @Module({
   imports: [EventEmitterModule.forRoot()],
@@ -12,7 +12,7 @@ export class QueueModule {
       module: QueueModule,
       providers: [
         {
-          provide: "QUEUE_OPTIONS",
+          provide: 'QUEUE_OPTIONS',
           useValue: options || {},
         },
         QueueService,

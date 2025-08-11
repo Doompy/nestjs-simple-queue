@@ -1,6 +1,6 @@
-import { Injectable, Inject, Logger } from "@nestjs/common";
-import { EventEmitter2 } from "@nestjs/event-emitter";
-import { QueueModuleOptions, Task } from "./queue.interface";
+import { Injectable, Inject, Logger } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { QueueModuleOptions, Task } from './queue.interface';
 
 @Injectable()
 export class QueueService {
@@ -11,7 +11,7 @@ export class QueueService {
   private activeTasks = new Map<string, number>();
 
   constructor(
-    @Inject("QUEUE_OPTIONS") private options: QueueModuleOptions,
+    @Inject('QUEUE_OPTIONS') private options: QueueModuleOptions,
     private eventEmitter: EventEmitter2
   ) {
     this.logger = options.logger || new Logger(QueueService.name);
@@ -35,7 +35,7 @@ export class QueueService {
       const retries = options?.retries || 0;
       const taskData = { payload, taskFunction, resolve, reject, retries };
       queue.push(taskData);
-      this.eventEmitter.emit("queue.task.added", { queueName, task: taskData });
+      this.eventEmitter.emit('queue.task.added', { queueName, task: taskData });
     });
 
     this.processQueue(queueName);
@@ -49,10 +49,7 @@ export class QueueService {
 
     if (!queue) return;
 
-    while (
-      queue.length > 0 &&
-      (this.activeTasks.get(queueName) || 0) < this.concurrency
-    ) {
+    while (queue.length > 0 && active < this.concurrency) {
       const task = queue.shift();
       if (!task) continue;
 
@@ -65,18 +62,18 @@ export class QueueService {
     this.currentTasks.set(queueName, task);
 
     try {
-      this.eventEmitter.emit("queue.task.processing", { queueName, task });
+      this.eventEmitter.emit('queue.task.processing', { queueName, task });
       await task.taskFunction(task.payload);
       task.resolve();
-      this.eventEmitter.emit("queue.task.success", { queueName, task });
+      this.eventEmitter.emit('queue.task.success', { queueName, task });
     } catch (error) {
       const errorMessage =
-        error instanceof Error ? error.message : "An unknown error occurred";
+        error instanceof Error ? error.message : 'An unknown error occurred';
       this.logger.error(
         `Error processing task in [${queueName}]. Retries left: ${task.retries}`,
         errorMessage
       );
-      this.eventEmitter.emit("queue.task.failed", { queueName, task, error });
+      this.eventEmitter.emit('queue.task.failed', { queueName, task, error });
 
       if (task.retries > 0) {
         task.retries--;
@@ -97,7 +94,7 @@ export class QueueService {
         this.activeTasks.get(queueName) === 0 &&
         this.queues.get(queueName)?.length === 0
       ) {
-        this.eventEmitter.emit("queue.empty", { queueName });
+        this.eventEmitter.emit('queue.empty', { queueName });
       }
     }
   }
