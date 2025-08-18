@@ -1,5 +1,5 @@
 {
-  "name": "nestjs-simple-queue",
+  "name": "@doompy/nestjs-simple-queue",
   "version": "1.0.1",
   "description": "A simple, generic, in-memory task queue service for NestJS",
   "main": "dist/index.js",
