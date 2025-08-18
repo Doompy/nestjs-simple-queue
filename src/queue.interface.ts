@@ -9,6 +9,16 @@ export interface QueueModuleOptions {
 }
 
 /**
+ * 작업 우선순위 레벨
+ */
+export enum TaskPriority {
+  LOW = 1,
+  NORMAL = 5,
+  HIGH = 8,
+  URGENT = 10,
+}
+
+/**
  * 큐 내부에서 작업을 관리하기 위한 인터페이스
  */
 export interface Task<T> {
@@ -17,4 +27,5 @@ export interface Task<T> {
   resolve: () => void;
   reject: (reason?: any) => void;
   retries: number;
+  priority: TaskPriority; // 우선순위 추가
 }

@@ -15,6 +15,7 @@ A simple, generic, in-memory task queue service for NestJS applications. This li
 - 🔄 **Retry Mechanism**: Configurable retry attempts for failed tasks
 - 📡 **Event-Driven**: Built-in event emission for task lifecycle
 - ⚡ **Concurrent Processing**: Configurable concurrency limits
+- 🔝 **Priority Queue**: Higher-priority tasks are processed first (LOW/NORMAL/HIGH/URGENT)
 - 🎯 **TypeScript Support**: Full TypeScript support with type definitions
 - 🧪 **Well Tested**: Comprehensive test coverage
 - 🔧 **CI/CD Ready**: Automated testing and deployment pipeline
@@ -110,7 +111,7 @@ QueueModule.forRoot({
 
 ### QueueService
 
-#### `enqueue<T>(queueName: string, payload: T, taskFunction: (payload: T) => Promise<void>, options?: { retries?: number }): Promise<void>`
+#### `enqueue<T>(queueName: string, payload: T, taskFunction: (payload: T) => Promise<void>, options?: { retries?: number; priority?: TaskPriority }): Promise<void>`
 
 Enqueues a new task for processing.
 
@@ -118,6 +119,20 @@ Enqueues a new task for processing.
 - `payload`: Data to be processed by the task
 - `taskFunction`: Async function that processes the payload
 - `options.retries`: Number of retry attempts for failed tasks (default: 0)
+- `options.priority`: Task priority level. Higher priority tasks are processed first. (default: `TaskPriority.NORMAL`)
+
+##### Priority Levels
+
+```typescript
+enum TaskPriority {
+  LOW = 1,
+  NORMAL = 5, // default
+  HIGH = 8,
+  URGENT = 10,
+}
+```
+
+Note: Priority is applied within each queue independently. Multiple queues do not affect each other's priority ordering.
 
 ### Events
 
@@ -152,6 +167,56 @@ await this.queueService.enqueue(
   },
   { retries: 3 }
 );
+```
+
+### With Priority (Priority Queue)
+
+```typescript
+// Higher-priority tasks are processed first
+import { TaskPriority } from 'nestjs-simple-queue';
+
+await this.queueService.enqueue(
+  'priority-queue',
+  { id: 123 },
+  async (data) => {
+    await this.processImportantWork(data);
+  },
+  { priority: TaskPriority.HIGH }
+);
+
+// If priority is omitted, NORMAL is the default
+await this.queueService.enqueue(
+  'priority-queue',
+  { id: 456 },
+  this.processWork
+);
+```
+
+### Priority with Multiple Queues
+
+```typescript
+// Priorities are enforced per queue independently
+import { TaskPriority } from 'nestjs-simple-queue';
+
+// Queue A
+await this.queueService.enqueue('queue-A', { id: 1 }, this.fnA, {
+  priority: TaskPriority.LOW,
+});
+await this.queueService.enqueue('queue-A', { id: 2 }, this.fnA, {
+  priority: TaskPriority.HIGH,
+});
+
+// Queue B
+await this.queueService.enqueue('queue-B', { id: 3 }, this.fnB, {
+  priority: TaskPriority.LOW,
+});
+await this.queueService.enqueue('queue-B', { id: 4 }, this.fnB, {
+  priority: TaskPriority.URGENT,
+});
+
+// Result:
+// queue-A executes id:2 before id:1
+// queue-B executes id:4 before id:3
 ```
 
 ### Multiple Queues
