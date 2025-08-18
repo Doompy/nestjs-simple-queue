@@ -197,7 +197,6 @@ describe('QueueService', () => {
   describe('Priority Queue Functionality', () => {
     let service: QueueService;
     let eventEmitter: EventEmitter2;
-    let emitSpy: jest.SpyInstance;
 
     beforeEach(async () => {
       const module: TestingModule = await Test.createTestingModule({
@@ -206,7 +205,6 @@ describe('QueueService', () => {
 
       service = module.get<QueueService>(QueueService);
       eventEmitter = module.get<EventEmitter2>(EventEmitter2);
-      emitSpy = jest.spyOn(eventEmitter, 'emit');
     });
 
     afterEach(() => {
