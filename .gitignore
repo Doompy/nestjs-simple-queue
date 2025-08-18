@@ -87,3 +87,7 @@ jspm_packages/
 
 # DynamoDB Local files
 .dynamodb/
+
+# NPM configuration
+.npmrc
+.NPMRC
