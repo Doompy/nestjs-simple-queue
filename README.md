@@ -174,7 +174,51 @@ npm test
 
 # Run tests in watch mode
 npm run test:watch
+
+# Run tests with coverage
+npm run test:coverage
 ```
+
+## CI/CD
+
+This project uses GitHub Actions for continuous integration and deployment:
+
+### Automated Workflows
+
+- **PR Check**: Runs on every pull request to ensure code quality
+- **CI/CD Pipeline**: Runs on push to main/develop branches and tag creation
+- **Security Audit**: Automated security vulnerability scanning
+- **Auto-publish**: Automatic npm package publishing on version tags
+
+### Workflow Triggers
+
+- **Push to main/develop**: Runs tests, linting, and security checks
+- **Pull Request**: Quick validation checks
+- **Version Tags (v\*)** : Full pipeline including npm publish and GitHub release
+
+### Required Secrets
+
+To enable automatic publishing, add these secrets to your GitHub repository:
+
+1. **NPM_TOKEN**: Your npm authentication token
+2. **GITHUB_TOKEN**: Automatically provided by GitHub
+
+### Manual Release Process
+
+1. Create and push a new version tag:
+
+   ```bash
+   git tag v1.0.3
+   git push origin v1.0.3
+   ```
+
+2. GitHub Actions will automatically:
+   - Run all tests and checks
+   - Build the project
+   - Publish to npm
+   - Create a GitHub release
+
+## Contributing
 
 ## Contributing
 
