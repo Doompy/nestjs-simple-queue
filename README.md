@@ -7,28 +7,55 @@
 [![GitHub issues](https://img.shields.io/github/issues/Doompy/nestjs-simple-queue.svg)](https://github.com/Doompy/nestjs-simple-queue/issues)
 [![CI/CD Status](https://github.com/Doompy/nestjs-simple-queue/workflows/CI%2FCD%20Pipeline/badge.svg)](https://github.com/Doompy/nestjs-simple-queue/actions)
 
-A simple, generic, in-memory task queue service for NestJS applications. This library provides a lightweight solution for handling asynchronous task processing with retry mechanisms, event emission, and configurable concurrency.
+A powerful, enterprise-grade task queue service for NestJS applications. Built with **Job-based architecture** for production reliability, featuring advanced capabilities like delayed jobs, task cancellation, state persistence, and graceful shutdown.
 
-## Features
+## ✨ Features
 
-- 🚀 **Simple & Lightweight**: Easy to integrate and use
-- 🔄 **Retry Mechanism**: Configurable retry attempts for failed tasks
-- 📡 **Event-Driven**: Built-in event emission for task lifecycle
+- 🏗️ **Job-based Architecture**: Industry-standard processor pattern for scalable task management
+- 🔄 **Retry Mechanism**: Configurable retry attempts with exponential backoff
+- ⏰ **Delayed Jobs**: Schedule tasks to run after a specified delay
+- 🚫 **Task Cancellation**: Cancel pending or delayed tasks
+- 💾 **State Persistence**: Optional persistence to survive application restarts
+- 🔝 **Priority Queue**: Process high-priority tasks first (LOW/NORMAL/HIGH/URGENT)
 - ⚡ **Concurrent Processing**: Configurable concurrency limits
-- 🔝 **Priority Queue**: Higher-priority tasks are processed first (LOW/NORMAL/HIGH/URGENT)
-- 🎯 **TypeScript Support**: Full TypeScript support with type definitions
-- 🧪 **Well Tested**: Comprehensive test coverage
+- 🛡️ **Graceful Shutdown**: Wait for active tasks to complete during shutdown
+- 📊 **Queue Statistics**: Real-time monitoring and metrics
+- 📡 **Event-Driven**: Comprehensive event emission for task lifecycle
+- 🎯 **TypeScript Support**: Full TypeScript support with strict type definitions
+- 🧪 **Well Tested**: Comprehensive test coverage with Jest
 - 🔧 **CI/CD Ready**: Automated testing and deployment pipeline
 
-## Installation
+## 📦 Installation
 
 ```bash
 npm install nestjs-simple-queue
 ```
 
-## Quick Start
+## 🚀 Quick Start
 
-### 1. Import the Module
+### 1. Create Job Processors
+
+```typescript
+// src/processors/email.processor.ts
+export class EmailProcessor {
+  constructor(private emailService: EmailService) {}
+
+  async process(payload: { email: string; subject: string; body: string }) {
+    await this.emailService.send(payload.email, payload.subject, payload.body);
+  }
+}
+
+// src/processors/payment.processor.ts
+export class PaymentProcessor {
+  constructor(private paymentService: PaymentService) {}
+
+  async process(payload: { amount: number; userId: string }) {
+    await this.paymentService.processPayment(payload.amount, payload.userId);
+  }
+}
+```
+
+### 2. Register Processors in Module
 
 ```typescript
 import { Module } from '@nestjs/common';
@@ -37,91 +64,315 @@ import { QueueModule } from 'nestjs-simple-queue';
 @Module({
   imports: [
     QueueModule.forRoot({
-      concurrency: 5, // Optional: default is 1
+      concurrency: 5,
+      processors: [
+        {
+          name: 'send-email',
+          process: (payload) =>
+            new EmailProcessor(emailService).process(payload),
+        },
+        {
+          name: 'process-payment',
+          process: (payload) =>
+            new PaymentProcessor(paymentService).process(payload),
+        },
+      ],
     }),
   ],
 })
 export class AppModule {}
 ```
 
-### 2. Use the Service
+### 3. Enqueue Jobs
 
 ```typescript
 import { Injectable } from '@nestjs/common';
-import { QueueService } from 'nestjs-simple-queue';
+import { QueueService, TaskPriority } from 'nestjs-simple-queue';
 
 @Injectable()
 export class TaskService {
   constructor(private readonly queueService: QueueService) {}
 
-  async processTask(data: any) {
-    // Enqueue a task with retry options
-    await this.queueService.enqueue(
-      'my-queue',
-      data,
-      async (payload) => {
-        // Your task logic here
-        await this.performTask(payload);
+  async sendWelcomeEmail(email: string) {
+    const taskId = await this.queueService.enqueue(
+      'email-queue',
+      'send-email',
+      {
+        email,
+        subject: 'Welcome!',
+        body: 'Thank you for joining us.',
       },
-      { retries: 3 }
+      {
+        retries: 3,
+        priority: TaskPriority.HIGH,
+      }
     );
+
+    console.log(`Email job enqueued with ID: ${taskId}`);
+  }
+
+  async schedulePaymentReminder(userId: string) {
+    // Send reminder after 24 hours
+    const taskId = await this.queueService.enqueue(
+      'reminder-queue',
+      'send-email',
+      {
+        email: 'user@example.com',
+        subject: 'Payment Reminder',
+        body: 'Please complete your payment.',
+      },
+      {
+        delay: 24 * 60 * 60 * 1000, // 24 hours in ms
+      }
+    );
+
+    return taskId;
   }
 }
 ```
 
-### 3. Listen to Events
+## 🔧 Configuration Options
+
+```typescript
+QueueModule.forRoot({
+  concurrency: 5, // Number of concurrent tasks per queue (default: 1)
+  gracefulShutdownTimeout: 30000, // Graceful shutdown timeout in ms (default: 30000)
+  enablePersistence: true, // Enable state persistence (default: false)
+  persistencePath: './queue-state.json', // Persistence file path (default: './queue-state.json')
+  processors: [
+    // Array of job processors
+    {
+      name: 'job-name',
+      process: async (payload) => {
+        // Your job logic here
+      },
+    },
+  ],
+  logger: customLogger, // Custom logger instance (optional)
+});
+```
+
+## 📚 Advanced Features
+
+### ⏰ Delayed Jobs
+
+Schedule jobs to run after a specified delay:
+
+```typescript
+// Send email after 1 hour
+await this.queueService.enqueue(
+  'email-queue',
+  'send-email',
+  { email: 'user@example.com', subject: 'Delayed Email' },
+  { delay: 60 * 60 * 1000 } // 1 hour in milliseconds
+);
+
+// Get list of delayed tasks
+const delayedTasks = this.queueService.getDelayedTasks();
+console.log(`${delayedTasks.length} tasks are scheduled`);
+```
+
+### 🚫 Task Cancellation
+
+Cancel pending or delayed tasks:
+
+```typescript
+// Enqueue a delayed task
+const taskId = await this.queueService.enqueue(
+  'email-queue',
+  'send-email',
+  { email: 'user@example.com' },
+  { delay: 60000 } // 1 minute delay
+);
+
+// Cancel the task before it executes
+const cancelled = this.queueService.cancelTask('email-queue', taskId);
+if (cancelled) {
+  console.log('Task was successfully cancelled');
+}
+```
+
+### 💾 State Persistence
+
+Enable persistence to survive application restarts:
+
+```typescript
+QueueModule.forRoot({
+  enablePersistence: true,
+  persistencePath: './my-queue-state.json',
+  processors: [
+    // Your processors
+  ],
+});
+```
+
+When persistence is enabled:
+
+- Queue state is automatically saved on application shutdown
+- Delayed tasks are restored and rescheduled on startup
+- Failed tasks are preserved for retry
+
+### 📊 Queue Statistics
+
+Monitor your queues in real-time:
+
+```typescript
+// Get statistics for a specific queue
+const stats = this.queueService.getQueueStats('email-queue');
+console.log(stats);
+// Output: {
+//   queueName: 'email-queue',
+//   pendingTasks: 5,
+//   activeTasks: 2,
+//   totalTasks: 7,
+//   delayedTasks: 3
+// }
+
+// Get statistics for all queues
+const allStats = this.queueService.getAllQueueStats();
+console.log(`Managing ${allStats.length} queues`);
+```
+
+### 🔝 Priority Queue
+
+Process high-priority tasks first:
+
+```typescript
+import { TaskPriority } from 'nestjs-simple-queue';
+
+// Urgent task (processed first)
+await this.queueService.enqueue('work-queue', 'urgent-job', data, {
+  priority: TaskPriority.URGENT, // 10
+});
+
+// High priority task
+await this.queueService.enqueue('work-queue', 'important-job', data, {
+  priority: TaskPriority.HIGH, // 8
+});
+
+// Normal priority task (default)
+await this.queueService.enqueue('work-queue', 'normal-job', data, {
+  priority: TaskPriority.NORMAL, // 5 (default)
+});
+
+// Low priority task (processed last)
+await this.queueService.enqueue('work-queue', 'background-job', data, {
+  priority: TaskPriority.LOW, // 1
+});
+
+// Execution order: urgent-job → important-job → normal-job → background-job
+```
+
+### 📡 Event Handling
+
+Listen to comprehensive task lifecycle events:
 
 ```typescript
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 
 @Injectable()
-export class EventListenerService implements OnModuleInit {
+export class QueueEventListener implements OnModuleInit {
   constructor(private readonly eventEmitter: EventEmitter2) {}
 
   onModuleInit() {
-    // Listen to task success events
+    // Task lifecycle events
+    this.eventEmitter.on('queue.task.added', (event) => {
+      console.log(`Task ${event.task.id} added to ${event.queueName}`);
+    });
+
+    this.eventEmitter.on('queue.task.processing', (event) => {
+      console.log(`Processing task ${event.task.id}`);
+    });
+
     this.eventEmitter.on('queue.task.success', (event) => {
-      console.log('Task succeeded:', event);
+      console.log(`Task ${event.task.id} completed successfully`);
     });
 
-    // Listen to task failure events
     this.eventEmitter.on('queue.task.failed', (event) => {
-      console.log('Task failed:', event);
+      console.log(`Task ${event.task.id} failed:`, event.error.message);
     });
 
-    // Listen to queue empty events
+    this.eventEmitter.on('queue.task.cancelled', (event) => {
+      console.log(`Task ${event.task.id} was cancelled`);
+    });
+
+    // Delayed task events
+    this.eventEmitter.on('queue.task.delayed', (event) => {
+      console.log(`Task ${event.task.id} scheduled for later execution`);
+    });
+
+    // Queue events
     this.eventEmitter.on('queue.empty', (event) => {
-      console.log('Queue is empty:', event);
+      console.log(`Queue ${event.queueName} is now empty`);
     });
   }
 }
 ```
 
-## Configuration Options
+## 🛡️ Graceful Shutdown
+
+The service automatically implements graceful shutdown:
 
 ```typescript
+// When your NestJS application shuts down:
+// 1. New tasks are rejected
+// 2. Current tasks are allowed to complete
+// 3. Queue state is persisted (if enabled)
+// 4. Application exits cleanly
+
+// You can configure the shutdown timeout:
 QueueModule.forRoot({
-  concurrency: 5, // Number of concurrent tasks (default: 1)
-  logger: customLogger, // Custom logger instance (optional)
+  gracefulShutdownTimeout: 60000, // Wait up to 60 seconds for tasks to complete
 });
 ```
 
-## API Reference
+## 📖 API Reference
 
 ### QueueService
 
-#### `enqueue<T>(queueName: string, payload: T, taskFunction: (payload: T) => Promise<void>, options?: { retries?: number; priority?: TaskPriority }): Promise<void>`
+#### `enqueue<T>(queueName: string, jobName: string, payload: T, options?: EnqueueOptions): Promise<string>`
 
-Enqueues a new task for processing.
+Enqueues a new job for processing.
+
+**Parameters:**
 
 - `queueName`: Unique identifier for the queue
-- `payload`: Data to be processed by the task
-- `taskFunction`: Async function that processes the payload
-- `options.retries`: Number of retry attempts for failed tasks (default: 0)
-- `options.priority`: Task priority level. Higher priority tasks are processed first. (default: `TaskPriority.NORMAL`)
+- `jobName`: Name of the registered job processor
+- `payload`: Data to be processed by the job
+- `options`: Optional configuration object
 
-##### Priority Levels
+**Options:**
+
+```typescript
+interface EnqueueOptions {
+  retries?: number; // Number of retry attempts (default: 0)
+  priority?: TaskPriority; // Task priority (default: NORMAL)
+  delay?: number; // Delay in milliseconds (default: 0)
+}
+```
+
+**Returns:** Promise that resolves to a unique task ID
+
+#### `cancelTask(queueName: string, taskId: string): boolean`
+
+Cancels a pending or delayed task.
+
+**Returns:** `true` if task was cancelled, `false` if task not found
+
+#### `getQueueStats(queueName: string): QueueStats | null`
+
+Gets statistics for a specific queue.
+
+#### `getAllQueueStats(): QueueStats[]`
+
+Gets statistics for all queues.
+
+#### `getDelayedTasks(): DelayedTaskInfo[]`
+
+Gets information about all delayed tasks.
+
+### Task Priority Levels
 
 ```typescript
 enum TaskPriority {
@@ -132,106 +383,78 @@ enum TaskPriority {
 }
 ```
 
-Note: Priority is applied within each queue independently. Multiple queues do not affect each other's priority ordering.
-
 ### Events
 
 The service emits the following events:
 
 - `queue.task.added`: When a task is added to the queue
+- `queue.task.delayed`: When a delayed task is scheduled
 - `queue.task.processing`: When a task starts processing
 - `queue.task.success`: When a task completes successfully
-- `queue.task.failed`: When a task fails
+- `queue.task.failed`: When a task fails after all retries
+- `queue.task.cancelled`: When a task is cancelled
 - `queue.empty`: When a queue becomes empty
 
-## Examples
+## 🔄 Migration from v1.x
 
-### Basic Usage
+### Breaking Changes in v2.0
 
-```typescript
-// Simple task processing
-await this.queueService.enqueue('email-queue', emailData, async (data) => {
-  await this.emailService.send(data);
-});
-```
+**v2.0 introduces a Job-based architecture** that replaces the previous function-based approach. This provides better scalability, persistence support, and follows industry standards.
 
-### With Retry Logic
+#### Before (v1.x)
 
 ```typescript
-// Task with retry attempts
+// Old function-based approach
 await this.queueService.enqueue(
-  'api-queue',
-  apiData,
-  async (data) => {
-    await this.externalApi.call(data);
-  },
-  { retries: 3 }
+  'email-queue',
+  { email: 'user@example.com' },
+  async (payload) => {
+    await this.emailService.send(payload.email);
+  }
 );
 ```
 
-### With Priority (Priority Queue)
+#### After (v2.x)
 
 ```typescript
-// Higher-priority tasks are processed first
-import { TaskPriority } from 'nestjs-simple-queue';
+// 1. Register processor in module
+QueueModule.forRoot({
+  processors: [
+    {
+      name: 'send-email',
+      process: async (payload) => {
+        await this.emailService.send(payload.email);
+      },
+    },
+  ],
+});
 
+// 2. Use job name instead of function
 await this.queueService.enqueue(
-  'priority-queue',
-  { id: 123 },
-  async (data) => {
-    await this.processImportantWork(data);
-  },
-  { priority: TaskPriority.HIGH }
-);
-
-// If priority is omitted, NORMAL is the default
-await this.queueService.enqueue(
-  'priority-queue',
-  { id: 456 },
-  this.processWork
+  'email-queue',
+  'send-email', // Job name
+  { email: 'user@example.com' }
 );
 ```
 
-### Priority with Multiple Queues
+#### Migration Steps
 
-```typescript
-// Priorities are enforced per queue independently
-import { TaskPriority } from 'nestjs-simple-queue';
+1. **Extract your task functions** into named processors
+2. **Register processors** in `QueueModule.forRoot()`
+3. **Update enqueue calls** to use job names instead of functions
+4. **Update your imports** - the API signature has changed
+5. **Test thoroughly** - the return value is now a task ID instead of void
 
-// Queue A
-await this.queueService.enqueue('queue-A', { id: 1 }, this.fnA, {
-  priority: TaskPriority.LOW,
-});
-await this.queueService.enqueue('queue-A', { id: 2 }, this.fnA, {
-  priority: TaskPriority.HIGH,
-});
+#### Benefits of Migration
 
-// Queue B
-await this.queueService.enqueue('queue-B', { id: 3 }, this.fnB, {
-  priority: TaskPriority.LOW,
-});
-await this.queueService.enqueue('queue-B', { id: 4 }, this.fnB, {
-  priority: TaskPriority.URGENT,
-});
+- ✅ **State Persistence**: Tasks survive application restarts
+- ✅ **Better Performance**: No function serialization overhead
+- ✅ **Delayed Jobs**: Schedule tasks for future execution
+- ✅ **Task Cancellation**: Cancel pending tasks
+- ✅ **Enhanced Monitoring**: Track tasks by unique IDs
+- ✅ **Industry Standard**: Follows established queue patterns
 
-// Result:
-// queue-A executes id:2 before id:1
-// queue-B executes id:4 before id:3
-```
-
-### Multiple Queues
-
-```typescript
-// Different queues for different types of tasks
-await this.queueService.enqueue(
-  'image-processing',
-  imageData,
-  this.processImage
-);
-await this.queueService.enqueue('data-sync', syncData, this.syncData);
-```
-
-## Testing
+## 🧪 Testing
 
 ```bash
 # Run tests
@@ -244,7 +467,7 @@ npm run test:watch
 npm run test:coverage
 ```
 
-## CI/CD
+## 🔄 CI/CD
 
 This project uses GitHub Actions for continuous integration and deployment:
 
@@ -255,26 +478,13 @@ This project uses GitHub Actions for continuous integration and deployment:
 - **Security Audit**: Automated security vulnerability scanning
 - **Auto-publish**: Automatic npm package publishing on version tags
 
-### Workflow Triggers
-
-- **Push to main/develop**: Runs tests, linting, and security checks
-- **Pull Request**: Quick validation checks
-- **Version Tags (v\*)** : Full pipeline including npm publish and GitHub release
-
-### Required Secrets
-
-To enable automatic publishing, add these secrets to your GitHub repository:
-
-1. **NPM_TOKEN**: Your npm authentication token
-2. **GITHUB_TOKEN**: Automatically provided by GitHub
-
 ### Manual Release Process
 
-1. Create and push a new version tag:
+1. Update version and create tag:
 
    ```bash
-   git tag v1.0.3
-   git push origin v1.0.3
+   npm version major # or minor/patch
+   git push origin main --tags
    ```
 
 2. GitHub Actions will automatically:
@@ -283,16 +493,44 @@ To enable automatic publishing, add these secrets to your GitHub repository:
    - Publish to npm
    - Create a GitHub release
 
-## Contributing
-
-## Contributing
+## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-## License
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Support
+## 🆘 Support
 
-If you have any questions or need help, please open an issue on GitHub.
+If you have any questions or need help:
+
+- 📖 Check the [documentation](https://github.com/Doompy/nestjs-simple-queue)
+- 🐛 Report bugs via [GitHub Issues](https://github.com/Doompy/nestjs-simple-queue/issues)
+- 💬 Ask questions in [GitHub Discussions](https://github.com/Doompy/nestjs-simple-queue/discussions)
+
+## 📋 Version History
+
+### v2.0.0 (Current)
+
+- **BREAKING CHANGES**: Job-based architecture replacing function-based tasks
+- **New Features**: Delayed jobs, task cancellation, state persistence, graceful shutdown
+- **Enhanced**: Priority queue, concurrent processing, comprehensive event system
+
+### v1.x
+
+- Function-based task processing
+- Basic retry mechanism and event emission
+- Priority queue support
+
+> **For detailed changelog and migration guide, see [GitHub Releases](https://github.com/Doompy/nestjs-simple-queue/releases)**
+
+---
+
+**Made with ❤️ for the NestJS community**
