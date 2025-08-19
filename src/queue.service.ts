@@ -399,6 +399,7 @@ export class QueueService implements OnApplicationShutdown, OnModuleInit {
    * Convert Task object to serializable format
    */
   private serializeTask(task: Task<any>): any {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { resolve, reject, promise, ...serializableTask } = task;
     return serializableTask;
   }
@@ -460,7 +461,7 @@ export class QueueService implements OnApplicationShutdown, OnModuleInit {
 
       // Restore queue state (don't restore running tasks)
       if (state.queues) {
-        for (const [queueName, tasks] of state.queues) {
+        for (const [queueName] of state.queues) {
           this.queues.set(queueName, []);
           this.activeTasks.set(queueName, 0);
           this.currentTasks.set(queueName, []);
@@ -534,7 +535,7 @@ export class QueueService implements OnApplicationShutdown, OnModuleInit {
     // Collect all running tasks from all queues
     const activePromises: Promise<void>[] = [];
 
-    for (const [queueName, tasks] of this.currentTasks) {
+    for (const [, tasks] of this.currentTasks) {
       for (const task of tasks) {
         activePromises.push(task.promise);
       }

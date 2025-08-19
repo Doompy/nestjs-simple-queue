@@ -1,6 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { Logger } from '@nestjs/common';
 import { QueueService } from './queue.service';
 import { QueueModule } from './queue.module';
 import { TaskPriority, QueueProcessor } from './queue.interface';
@@ -60,7 +59,7 @@ class TestFailingProcessor {
 }
 
 class TestSlowProcessor {
-  async process(payload: any): Promise<void> {
+  async process(_payload: any): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 10)); // 10ms로 단축
     console.log('Slow task completed');
   }
@@ -433,6 +432,7 @@ describe('QueueService (Job-based)', () => {
       }).compile();
 
       const priorityService = module.get<QueueService>(QueueService);
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const priorityEventEmitter = module.get<EventEmitter2>(EventEmitter2);
 
       // queue1: 낮은 우선순위부터
@@ -590,6 +590,7 @@ describe('QueueService (Job-based)', () => {
   describe('Concurrency Control with Jobs', () => {
     describe('with concurrency of 2', () => {
       let concurrencyService: QueueService;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       let concurrencyEventEmitter: EventEmitter2;
       let concurrencyTracker: any;
 
@@ -696,6 +697,7 @@ describe('QueueService (Job-based)', () => {
   describe('Graceful Shutdown with Jobs', () => {
     describe('with graceful shutdown timeout', () => {
       let shutdownService: QueueService;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       let shutdownEventEmitter: EventEmitter2;
       let slowProcessor: TestSlowProcessor;
 
@@ -743,7 +745,7 @@ describe('QueueService (Job-based)', () => {
         let taskCompleted = false;
 
         const completionTracker = {
-          async process(payload: any): Promise<void> {
+          async process(_payload: any): Promise<void> {
             await new Promise((resolve) => setTimeout(resolve, 20)); // 20ms로 단축
             taskCompleted = true;
           },
@@ -765,15 +767,16 @@ describe('QueueService (Job-based)', () => {
         }).compile();
 
         const completionService = module.get<QueueService>(QueueService);
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const completionEventEmitter = module.get<EventEmitter2>(EventEmitter2);
 
-        const payload = { data: 'active-task-test' };
+        const _payload = { data: 'active-task-test' };
 
         // 작업 추가
         const enqueuePromise = completionService.enqueue(
           'active-queue',
           'completion-job',
-          payload
+          _payload
         );
 
         // 작업이 시작되기 전에 shutdown 시작
