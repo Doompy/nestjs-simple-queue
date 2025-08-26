@@ -3,7 +3,6 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { QueueService } from './queue.service';
 import { QueueModule } from './queue.module';
 import { TaskPriority, QueueProcessor } from './queue.interface';
-import { QueueJob } from './queue.processor';
 
 // Jest 전역 타임아웃 설정 (30초)
 jest.setTimeout(30000);
@@ -804,7 +803,6 @@ describe('QueueService (Job-based)', () => {
 
 describe('Processor Management', () => {
   let service: QueueService;
-  let eventEmitter: EventEmitter2;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -822,7 +820,6 @@ describe('Processor Management', () => {
     }).compile();
 
     service = module.get<QueueService>(QueueService);
-    eventEmitter = module.get<EventEmitter2>(EventEmitter2);
   });
 
   describe('registerProcessor', () => {
@@ -941,7 +938,6 @@ describe('Processor Management', () => {
 
 describe('Queue Management', () => {
   let service: QueueService;
-  let eventEmitter: EventEmitter2;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -958,7 +954,6 @@ describe('Queue Management', () => {
     }).compile();
 
     service = module.get<QueueService>(QueueService);
-    eventEmitter = module.get<EventEmitter2>(EventEmitter2);
   });
 
   describe('clearQueue', () => {
@@ -1014,32 +1009,30 @@ describe('Queue Management', () => {
 
 describe('Task Management', () => {
   let service: QueueService;
-  let eventEmitter: EventEmitter2;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       imports: [
-        QueueModule.forRoot({
-          processors: [
-            {
-              name: 'test-job',
-              process: jest.fn().mockResolvedValue(undefined),
-            },
-            {
-              name: 'slow-job',
-              process: jest
-                .fn()
-                .mockImplementation(
-                  () => new Promise((resolve) => setTimeout(resolve, 100))
-                ),
-            },
-          ],
-        }),
+            QueueModule.forRoot({
+      processors: [
+        {
+          name: 'test-job',
+          process: jest.fn().mockResolvedValue(undefined),
+        },
+        {
+          name: 'slow-job',
+          process: jest
+            .fn()
+            .mockImplementation(
+              () => new Promise((resolve) => setTimeout(resolve, 100))
+            ),
+        },
       ],
-    }).compile();
+    }),
+  ],
+}).compile();
 
-    service = module.get<QueueService>(QueueService);
-    eventEmitter = module.get<EventEmitter2>(EventEmitter2);
+service = module.get<QueueService>(QueueService);
   });
 
   describe('getTaskById', () => {

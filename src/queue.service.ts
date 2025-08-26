@@ -509,7 +509,7 @@ export class QueueService
    */
   getTaskById(taskId: string): Task<any> | null {
     // Check in active queues
-    for (const [queueName, queue] of this.queues) {
+    for (const [, queue] of this.queues) {
       const task = queue.find((t) => t.id === taskId);
       if (task) {
         return task;
@@ -523,7 +523,7 @@ export class QueueService
     }
 
     // Check in current running tasks
-    for (const [queueName, tasks] of this.currentTasks) {
+    for (const [, tasks] of this.currentTasks) {
       const task = tasks.find((t) => t.id === taskId);
       if (task) {
         return task;
