@@ -14,10 +14,14 @@ import {
   TaskPriority,
   QueueStats,
   DelayedTaskInfo,
+  ProcessorManagement,
+  TaskStatus,
 } from './queue.interface';
 
 @Injectable()
-export class QueueService implements OnApplicationShutdown, OnModuleInit {
+export class QueueService
+  implements OnApplicationShutdown, OnModuleInit, ProcessorManagement
+{
   private readonly logger: Logger;
   private queues = new Map<string, Task<any>[]>();
   private currentTasks = new Map<string, Task<any>[]>(); // 큐 이름당 실행 중인 작업 배열
@@ -356,6 +360,266 @@ export class QueueService implements OnApplicationShutdown, OnModuleInit {
     }
 
     return stats;
+  }
+
+  /**
+   * Register a processor at runtime
+   * @param name - Job processor name
+   * @param processor - Processor function
+   * @returns true if registered successfully, false if already exists
+   */
+  registerProcessor(
+    name: string,
+    processor: (payload: any) => Promise<void>
+  ): boolean {
+    if (this.processors.has(name)) {
+      this.logger.warn(
+        `Processor '${name}' already exists. Use updateProcessor() to override.`
+      );
+      return false;
+    }
+
+    this.processors.set(name, processor);
+    this.logger.log(`Processor '${name}' registered successfully.`);
+    return true;
+  }
+
+  /**
+   * Update an existing processor or register a new one
+   * @param name - Job processor name
+   * @param processor - Processor function
+   * @returns true if updated/registered successfully
+   */
+  updateProcessor(
+    name: string,
+    processor: (payload: any) => Promise<void>
+  ): boolean {
+    const existed = this.processors.has(name);
+    this.processors.set(name, processor);
+
+    if (existed) {
+      this.logger.log(`Processor '${name}' updated successfully.`);
+    } else {
+      this.logger.log(`Processor '${name}' registered successfully.`);
+    }
+
+    return true;
+  }
+
+  /**
+   * Remove a processor
+   * @param name - Job processor name
+   * @returns true if removed successfully, false if not found
+   */
+  unregisterProcessor(name: string): boolean {
+    const removed = this.processors.delete(name);
+    if (removed) {
+      this.logger.log(`Processor '${name}' unregistered successfully.`);
+    } else {
+      this.logger.warn(`Processor '${name}' not found.`);
+    }
+    return removed;
+  }
+
+  /**
+   * Check if a processor is registered
+   * @param name - Job processor name
+   * @returns true if processor exists
+   */
+  hasProcessor(name: string): boolean {
+    return this.processors.has(name);
+  }
+
+  /**
+   * Get all registered processor names
+   * @returns Array of processor names
+   */
+  getRegisteredProcessors(): string[] {
+    return Array.from(this.processors.keys());
+  }
+
+  /**
+   * Get processor information
+   * @param name - Job processor name
+   * @returns Processor info or null if not found
+   */
+  getProcessorInfo(name: string): { name: string; registered: boolean } | null {
+    return this.processors.has(name) ? { name, registered: true } : null;
+  }
+
+  /**
+   * Clear all queues
+   * @returns Number of cleared tasks
+   */
+  clearAllQueues(): number {
+    let totalCleared = 0;
+
+    for (const [queueName, queue] of this.queues) {
+      totalCleared += queue.length;
+      queue.length = 0;
+      this.activeTasks.set(queueName, 0);
+      this.currentTasks.set(queueName, []);
+    }
+
+    // Clear delayed tasks
+    const delayedCount = this.delayedTasks.size;
+    this.delayedTasks.clear();
+
+    this.logger.log(
+      `Cleared all queues. Removed ${totalCleared + delayedCount} tasks`
+    );
+    return totalCleared + delayedCount;
+  }
+
+  /**
+   * Clear specific queue
+   * @param queueName - Name of queue to clear
+   * @returns Number of cleared tasks
+   */
+  clearQueue(queueName: string): number {
+    const queue = this.queues.get(queueName);
+    if (!queue) {
+      return 0;
+    }
+
+    const clearedCount = queue.length;
+    queue.length = 0;
+    this.activeTasks.set(queueName, 0);
+    this.currentTasks.set(queueName, []);
+
+    // Clear delayed tasks for this queue
+    let delayedCount = 0;
+    for (const [taskId, task] of this.delayedTasks) {
+      if (task.queueName === queueName) {
+        this.delayedTasks.delete(taskId);
+        delayedCount++;
+      }
+    }
+
+    this.logger.log(
+      `Cleared queue '${queueName}'. Removed ${clearedCount + delayedCount} tasks`
+    );
+    return clearedCount + delayedCount;
+  }
+
+  /**
+   * Get task by ID
+   * @param taskId - Task ID to find
+   * @returns Task if found, null otherwise
+   */
+  getTaskById(taskId: string): Task<any> | null {
+    // Check in active queues
+    for (const [queueName, queue] of this.queues) {
+      const task = queue.find((t) => t.id === taskId);
+      if (task) {
+        return task;
+      }
+    }
+
+    // Check in delayed tasks
+    const delayedTask = this.delayedTasks.get(taskId);
+    if (delayedTask) {
+      return delayedTask;
+    }
+
+    // Check in current running tasks
+    for (const [queueName, tasks] of this.currentTasks) {
+      const task = tasks.find((t) => t.id === taskId);
+      if (task) {
+        return task;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Get task status
+   * @param taskId - Task ID
+   * @returns Task status information with taskId
+   */
+  getTaskStatus(taskId: string): TaskStatus & { taskId: string } {
+    const task = this.getTaskById(taskId);
+
+    if (!task) {
+      return { status: 'not_found', taskId };
+    }
+
+    // Check if it's a delayed task
+    if (this.delayedTasks.has(taskId)) {
+      const delayedTask = this.delayedTasks.get(taskId)!;
+      return {
+        status: 'delayed',
+        taskId,
+        queueName: delayedTask.queueName || 'default',
+        jobName: delayedTask.jobName,
+        priority: delayedTask.priority,
+        createdAt: delayedTask.createdAt,
+        scheduledAt: delayedTask.scheduledAt!,
+        delay: delayedTask.scheduledAt
+          ? Math.max(0, delayedTask.scheduledAt.getTime() - Date.now())
+          : 0,
+      };
+    }
+
+    // Check if it's currently processing
+    for (const [queueName, tasks] of this.currentTasks) {
+      const processingTask = tasks.find((t) => t.id === taskId);
+      if (processingTask) {
+        return {
+          status: 'processing',
+          taskId,
+          queueName,
+          jobName: processingTask.jobName,
+          priority: processingTask.priority,
+          createdAt: processingTask.createdAt,
+          retries: processingTask.retries,
+          startedAt: processingTask.createdAt, // For now, using createdAt as startedAt
+        };
+      }
+    }
+
+    // Check if it's pending in a queue
+    for (const [queueName, queue] of this.queues) {
+      const pendingTask = queue.find((t) => t.id === taskId);
+      if (pendingTask) {
+        return {
+          status: 'pending',
+          taskId,
+          queueName,
+          jobName: pendingTask.jobName,
+          priority: pendingTask.priority,
+          createdAt: pendingTask.createdAt,
+          retries: pendingTask.retries,
+        };
+      }
+    }
+
+    // If not found in any active state, it might be completed/failed/cancelled
+    return {
+      status: 'not_found',
+      taskId,
+    };
+  }
+
+  /**
+   * Get tasks by queue
+   * @param queueName - Queue name
+   * @returns Array of tasks in the queue
+   */
+  getTasksByQueue(queueName: string): Task<any>[] {
+    const queue = this.queues.get(queueName);
+    return queue ? [...queue] : [];
+  }
+
+  /**
+   * Get active tasks by queue
+   * @param queueName - Queue name
+   * @returns Array of currently processing tasks
+   */
+  getActiveTasksByQueue(queueName: string): Task<any>[] {
+    const tasks = this.currentTasks.get(queueName);
+    return tasks ? [...tasks] : [];
   }
 
   /**

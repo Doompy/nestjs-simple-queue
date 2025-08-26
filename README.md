@@ -7,7 +7,7 @@
 [![GitHub issues](https://img.shields.io/github/issues/Doompy/nestjs-simple-queue.svg)](https://github.com/Doompy/nestjs-simple-queue/issues)
 [![CI/CD Status](https://github.com/Doompy/nestjs-simple-queue/workflows/CI%2FCD%20Pipeline/badge.svg)](https://github.com/Doompy/nestjs-simple-queue/actions)
 
-A powerful, enterprise-grade task queue service for NestJS applications. Built with **Job-based architecture** for production reliability, featuring advanced capabilities like delayed jobs, task cancellation, state persistence, and graceful shutdown.
+A powerful, enterprise-grade task queue service for NestJS applications. Built with **Job-based architecture** for production reliability, featuring advanced capabilities like delayed jobs, task cancellation, state persistence, graceful shutdown, and **flexible processor registration**.
 
 ## ✨ Features
 
@@ -24,6 +24,7 @@ A powerful, enterprise-grade task queue service for NestJS applications. Built w
 - 🎯 **TypeScript Support**: Full TypeScript support with strict type definitions
 - 🧪 **Well Tested**: Comprehensive test coverage with Jest
 - 🔧 **CI/CD Ready**: Automated testing and deployment pipeline
+- 🔌 **Flexible Processor Registration**: Multiple ways to register processors (static, dynamic, decorators, mixins)
 
 ## 📦 Installation
 
@@ -34,6 +35,8 @@ npm install nestjs-simple-queue
 ## 🚀 Quick Start
 
 ### 1. Create Job Processors
+
+#### Method 1: Static Registration (Traditional)
 
 ```typescript
 // src/processors/email.processor.ts
@@ -55,7 +58,55 @@ export class PaymentProcessor {
 }
 ```
 
+#### Method 2: Decorator-based Registration (Recommended)
+
+```typescript
+// src/processors/email.processor.ts
+import { Injectable } from '@nestjs/common';
+import { QueueJob } from 'nestjs-simple-queue';
+
+@Injectable()
+export class EmailProcessor {
+  constructor(private emailService: EmailService) {}
+
+  @QueueJob('send-email')
+  async sendEmail(payload: { email: string; subject: string; body: string }) {
+    await this.emailService.send(payload.email, payload.subject, payload.body);
+  }
+
+  @QueueJob('send-welcome-email')
+  async sendWelcomeEmail(payload: { email: string; name: string }) {
+    await this.emailService.send(
+      payload.email,
+      `Welcome ${payload.name}!`,
+      'Thank you for joining us.'
+    );
+  }
+}
+
+// src/processors/payment.processor.ts
+import { Injectable } from '@nestjs/common';
+import { QueueJob } from 'nestjs-simple-queue';
+
+@Injectable()
+export class PaymentProcessor {
+  constructor(private paymentService: PaymentService) {}
+
+  @QueueJob('process-payment')
+  async processPayment(payload: { amount: number; userId: string }) {
+    await this.paymentService.processPayment(payload.amount, payload.userId);
+  }
+
+  @QueueJob('refund-payment')
+  async refundPayment(payload: { paymentId: string; amount: number }) {
+    await this.paymentService.refund(payload.paymentId, payload.amount);
+  }
+}
+```
+
 ### 2. Register Processors in Module
+
+#### Method 1: Static Registration (Traditional)
 
 ```typescript
 import { Module } from '@nestjs/common';
@@ -81,6 +132,69 @@ import { QueueModule } from 'nestjs-simple-queue';
   ],
 })
 export class AppModule {}
+```
+
+#### Method 2: Decorator-based Registration (Recommended)
+
+```typescript
+import { Module } from '@nestjs/common';
+import { QueueModule } from 'nestjs-simple-queue';
+import { EmailProcessor, PaymentProcessor } from './processors';
+
+@Module({
+  imports: [
+    QueueModule.forRoot({ concurrency: 5 }),
+    QueueModule.forProcessors([EmailProcessor, PaymentProcessor]), // 데코레이터 기반 자동 등록
+  ],
+})
+export class AppModule {}
+```
+
+#### Method 3: Feature-based Registration (Modular)
+
+```typescript
+// app.module.ts
+import { Module } from '@nestjs/common';
+import { QueueModule } from 'nestjs-simple-queue';
+
+@Module({
+  imports: [QueueModule.forRoot({ concurrency: 5 })],
+})
+export class AppModule {}
+
+// email.module.ts
+import { Module } from '@nestjs/common';
+import { QueueModule } from 'nestjs-simple-queue';
+
+@Module({
+  imports: [
+    QueueModule.forFeature([
+      {
+        name: 'send-email',
+        process: (payload) =>
+          new EmailProcessor(emailService).sendEmail(payload),
+      },
+    ]),
+  ],
+})
+export class EmailModule {}
+
+// payment.module.ts
+import { Module } from '@nestjs/common';
+import { QueueModule } from 'nestjs-simple-queue';
+
+@Module({
+  imports: [
+    QueueModule.forFeature([
+      {
+        name: 'process-payment',
+        process: (payload) =>
+          new PaymentProcessor(paymentService).processPayment(payload),
+      },
+    ]),
+  ],
+})
+export class PaymentModule {}
 ```
 
 ### 3. Enqueue Jobs
@@ -263,6 +377,164 @@ await this.queueService.enqueue('work-queue', 'background-job', data, {
 // Execution order: urgent-job → important-job → normal-job → background-job
 ```
 
+### 🔌 Flexible Processor Registration
+
+#### Decorator-based Registration (Recommended)
+
+Use the `@QueueJob` decorator for clean, declarative processor registration:
+
+```typescript
+import { Injectable } from '@nestjs/common';
+import { QueueJob } from 'nestjs-simple-queue';
+
+@Injectable()
+export class EmailProcessor {
+  constructor(private emailService: EmailService) {}
+
+  @QueueJob('send-email')
+  async sendEmail(payload: { email: string; subject: string; body: string }) {
+    await this.emailService.send(payload.email, payload.subject, payload.body);
+  }
+
+  @QueueJob('send-welcome-email')
+  async sendWelcomeEmail(payload: { email: string; name: string }) {
+    await this.emailService.send(
+      payload.email,
+      `Welcome ${payload.name}!`,
+      'Thank you for joining us.'
+    );
+  }
+
+  @QueueJob('send-password-reset')
+  async sendPasswordReset(payload: { email: string; resetToken: string }) {
+    await this.emailService.send(
+      payload.email,
+      'Password Reset Request',
+      `Your reset token is: ${payload.resetToken}`
+    );
+  }
+}
+
+// Register in module
+import { Module } from '@nestjs/common';
+import { QueueModule } from 'nestjs-simple-queue';
+
+@Module({
+  imports: [
+    QueueModule.forRoot({ concurrency: 5 }),
+    QueueModule.forProcessors([EmailProcessor]), // Automatically registers all @QueueJob methods
+  ],
+})
+export class AppModule {}
+```
+
+**Benefits of Decorator-based Registration:**
+
+- ✅ **Clean and Declarative**: Clear separation between job logic and registration
+- ✅ **Type Safety**: Full TypeScript support with proper typing
+- ✅ **Auto-discovery**: Methods are automatically registered based on decorators
+- ✅ **Dependency Injection**: Full NestJS DI support for processor classes
+- ✅ **Maintainability**: Easy to add, remove, or modify jobs
+- ✅ **Testability**: Easy to unit test individual job methods
+
+#### Dynamic Processor Registration
+
+Register processors at runtime for dynamic functionality:
+
+```typescript
+import { Injectable, OnModuleInit } from '@nestjs/common';
+import { QueueService } from 'nestjs-simple-queue';
+
+@Injectable()
+export class DynamicTaskService implements OnModuleInit {
+  constructor(private readonly queueService: QueueService) {}
+
+  onModuleInit() {
+    // Register processors dynamically
+    this.queueService.registerProcessor(
+      'custom-notification',
+      async (payload) => {
+        console.log('Processing custom notification:', payload.message);
+        // Custom notification logic
+      }
+    );
+
+    this.queueService.registerProcessor('data-backup', async (payload) => {
+      console.log('Backing up data for:', payload.database);
+      // Backup logic
+    });
+  }
+
+  // Register processor on demand
+  async registerNewProcessor(
+    jobName: string,
+    processor: (payload: any) => Promise<void>
+  ) {
+    const success = this.queueService.registerProcessor(jobName, processor);
+    if (success) {
+      console.log(`Processor '${jobName}' registered successfully`);
+    } else {
+      console.log(`Processor '${jobName}' already exists`);
+    }
+  }
+
+  // Update existing processor
+  async updateProcessor(
+    jobName: string,
+    newProcessor: (payload: any) => Promise<void>
+  ) {
+    this.queueService.updateProcessor(jobName, newProcessor);
+    console.log(`Processor '${jobName}' updated successfully`);
+  }
+}
+```
+
+#### Module-based Registration
+
+Register processors in different modules for better organization:
+
+```typescript
+// email.module.ts
+import { Module } from '@nestjs/common';
+import { QueueModule } from 'nestjs-simple-queue';
+
+@Module({
+  imports: [
+    QueueModule.forFeature([
+      {
+        name: 'send-email',
+        process: (payload) => new EmailService().send(payload),
+      },
+      {
+        name: 'send-notification',
+        process: (payload) => new NotificationService().send(payload),
+      },
+    ]),
+  ],
+})
+export class EmailModule {}
+
+// payment.module.ts
+import { Module } from '@nestjs/common';
+import { QueueModule } from 'nestjs-simple-queue';
+
+@Module({
+  imports: [
+    QueueModule.forFeature([
+      {
+        name: 'process-payment',
+        process: (payload) => new PaymentService().process(payload),
+      },
+      {
+        name: 'refund-payment',
+        process: (payload) => new PaymentService().refund(payload),
+      },
+    ]),
+  ],
+})
+export class PaymentModule {}
+```
+
 ### 📡 Event Handling
 
 Listen to comprehensive task lifecycle events:
@@ -354,6 +626,49 @@ interface EnqueueOptions {
 
 **Returns:** Promise that resolves to a unique task ID
 
+#### **Processor Management Methods**
+
+##### `registerProcessor(name: string, processor: (payload: any) => Promise<void>): boolean`
+
+Registers a new processor at runtime.
+
+**Parameters:**
+
+- `name`: Job processor name
+- `processor`: Processor function
+
+**Returns:** `true` if registered successfully, `false` if already exists
+
+##### `updateProcessor(name: string, processor: (payload: any) => Promise<void>): boolean`
+
+Updates an existing processor or registers a new one.
+
+**Returns:** `true` if updated/registered successfully
+
+##### `unregisterProcessor(name: string): boolean`
+
+Removes a processor.
+
+**Returns:** `true` if removed successfully, `false` if not found
+
+##### `hasProcessor(name: string): boolean`
+
+Checks if a processor is registered.
+
+**Returns:** `true` if processor exists
+
+##### `getRegisteredProcessors(): string[]`
+
+Gets all registered processor names.
+
+**Returns:** Array of processor names
+
+##### `getProcessorInfo(name: string): ProcessorInfo | null`
+
+Gets processor information.
+
+**Returns:** Processor info or null if not found
+
 #### `cancelTask(queueName: string, taskId: string): boolean`
 
 Cancels a pending or delayed task.
@@ -372,6 +687,128 @@ Gets statistics for all queues.
 
 Gets information about all delayed tasks.
 
+#### **Queue Management Methods**
+
+##### `clearAllQueues(): number`
+
+Clears all queues and removes all pending, active, and delayed tasks.
+
+**Returns:** Total number of tasks that were cleared
+
+##### `clearQueue(queueName: string): number`
+
+Clears a specific queue and removes all its tasks.
+
+**Parameters:**
+
+- `queueName`: Name of the queue to clear
+
+**Returns:** Number of tasks that were cleared
+
+#### **Task Management Methods**
+
+##### `getTaskById(taskId: string): Task<any> | null`
+
+Gets a specific task by its ID.
+
+**Parameters:**
+
+- `taskId`: Unique task identifier
+
+**Returns:** Task object if found, null otherwise
+
+##### `getTaskStatus(taskId: string): TaskStatus`
+
+Gets the current status of a specific task.
+
+**Parameters:**
+
+- `taskId`: Unique task identifier
+
+**Returns:** Task status information
+
+**Task Status Types:**
+
+The `TaskStatus` is a union type that provides type-safe access to status-specific information. The `taskId` is automatically included in the return value:
+
+````typescript
+// Union type for all possible statuses
+type TaskStatus =
+  | PendingTaskStatus
+  | ProcessingTaskStatus
+  | CompletedTaskStatus
+  | FailedTaskStatus
+  | CancelledTaskStatus
+  | DelayedTaskStatus
+  | NotFoundTaskStatus;
+
+// The getTaskStatus method returns TaskStatus & { taskId: string }
+// So taskId is always available regardless of status
+
+// Example usage with type guards
+const status = queueService.getTaskStatus('task-id');
+
+// taskId is always available
+console.log(`Querying status for task: ${status.taskId}`);
+
+if (status.status === 'pending') {
+  console.log(`Task ${status.taskId} is pending in queue ${status.queueName}`);
+  console.log(`Job: ${status.jobName}, Priority: ${status.priority}`);
+  console.log(`Created: ${status.createdAt}, Retries: ${status.retries}`);
+} else if (status.status === 'processing') {
+  console.log(`Task ${status.taskId} is currently processing`);
+  console.log(`Started at: ${status.startedAt}`);
+} else if (status.status === 'completed') {
+  console.log(`Task ${status.taskId} completed successfully`);
+  console.log(`Completed at: ${status.completedAt}`);
+  console.log(`Result: ${status.result}`);
+} else if (status.status === 'failed') {
+  console.log(`Task ${status.taskId} failed`);
+  console.log(`Error: ${status.error}`);
+  console.log(`Failed at: ${status.failedAt}, Retries: ${status.retries}`);
+} else if (status.status === 'delayed') {
+  console.log(`Task ${status.taskId} is delayed`);
+  console.log(`Scheduled at: ${status.scheduledAt}`);
+  console.log(`Remaining delay: ${status.delay}ms`);
+} else if (status.status === 'cancelled') {
+  console.log(`Task ${status.taskId} was cancelled`);
+  console.log(`Cancelled at: ${status.cancelledAt}`);
+} else {
+  console.log(`Task ${status.taskId} not found`);
+}
+
+**Status Type Details:**
+
+Each status type provides specific, type-safe information:
+
+- **`PendingTaskStatus`**: Basic task info + queue details
+- **`ProcessingTaskStatus`**: Task info + processing start time
+- **`CompletedTaskStatus`**: Task info + completion time and result
+- **`FailedTaskStatus`**: Task info + failure time and error details
+- **`CancelledTaskStatus`**: Task info + cancellation time
+- **`DelayedTaskStatus`**: Task info + scheduled time and delay
+- **`NotFoundTaskStatus`**: Only taskId when task doesn't exist
+
+##### `getTasksByQueue(queueName: string): Task<any>[]`
+
+Gets all pending tasks in a specific queue.
+
+**Parameters:**
+
+- `queueName`: Name of the queue
+
+**Returns:** Array of pending tasks
+
+##### `getActiveTasksByQueue(queueName: string): Task<any>[]`
+
+Gets all currently processing tasks in a specific queue.
+
+**Parameters:**
+
+- `queueName`: Name of the queue
+
+**Returns:** Array of active tasks
+
 ### Task Priority Levels
 
 ```typescript
@@ -381,7 +818,7 @@ enum TaskPriority {
   HIGH = 8,
   URGENT = 10,
 }
-```
+````
 
 ### Events
 

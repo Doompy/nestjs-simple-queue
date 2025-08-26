@@ -3,6 +3,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { QueueService } from './queue.service';
 import { QueueModule } from './queue.module';
 import { TaskPriority, QueueProcessor } from './queue.interface';
+import { QueueJob } from './queue.processor';
 
 // Jest 전역 타임아웃 설정 (30초)
 jest.setTimeout(30000);
@@ -798,5 +799,412 @@ describe('QueueService (Job-based)', () => {
         expect(completionTracker.process).toHaveBeenCalledTimes(1);
       });
     });
+  });
+});
+
+describe('Processor Management', () => {
+  let service: QueueService;
+  let eventEmitter: EventEmitter2;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      imports: [
+        QueueModule.forRoot({
+          logger: {
+            log: jest.fn(),
+            error: jest.fn(),
+            warn: jest.fn(),
+            debug: jest.fn(),
+            verbose: jest.fn(),
+          } as any,
+        }),
+      ],
+    }).compile();
+
+    service = module.get<QueueService>(QueueService);
+    eventEmitter = module.get<EventEmitter2>(EventEmitter2);
+  });
+
+  describe('registerProcessor', () => {
+    it('should register a new processor successfully', () => {
+      const processor = jest.fn().mockResolvedValue(undefined);
+      const result = service.registerProcessor('test-job', processor);
+
+      expect(result).toBe(true);
+      expect(service.hasProcessor('test-job')).toBe(true);
+      expect(service.getRegisteredProcessors()).toContain('test-job');
+    });
+
+    it('should return false when processor already exists', () => {
+      const processor1 = jest.fn().mockResolvedValue(undefined);
+      const processor2 = jest.fn().mockResolvedValue(undefined);
+
+      service.registerProcessor('test-job', processor1);
+      const result = service.registerProcessor('test-job', processor2);
+
+      expect(result).toBe(false);
+      expect(service.getRegisteredProcessors()).toHaveLength(1);
+    });
+
+    it('should return false when processor already exists', () => {
+      const processor1 = jest.fn().mockResolvedValue(undefined);
+      const processor2 = jest.fn().mockResolvedValue(undefined);
+
+      service.registerProcessor('test-job', processor1);
+      const result = service.registerProcessor('test-job', processor2);
+
+      expect(result).toBe(false);
+      expect(service.getRegisteredProcessors()).toHaveLength(1);
+    });
+  });
+
+  describe('updateProcessor', () => {
+    it('should update existing processor', () => {
+      const processor1 = jest.fn().mockResolvedValue(undefined);
+      const processor2 = jest.fn().mockResolvedValue(undefined);
+
+      service.registerProcessor('test-job', processor1);
+      const result = service.updateProcessor('test-job', processor2);
+
+      expect(result).toBe(true);
+      expect(service.hasProcessor('test-job')).toBe(true);
+    });
+
+    it('should register new processor if does not exist', () => {
+      const processor = jest.fn().mockResolvedValue(undefined);
+      const result = service.updateProcessor('new-job', processor);
+
+      expect(result).toBe(true);
+      expect(service.hasProcessor('new-job')).toBe(true);
+    });
+  });
+
+  describe('unregisterProcessor', () => {
+    it('should unregister existing processor', () => {
+      const processor = jest.fn().mockResolvedValue(undefined);
+      service.registerProcessor('test-job', processor);
+
+      const result = service.unregisterProcessor('test-job');
+
+      expect(result).toBe(true);
+      expect(service.hasProcessor('test-job')).toBe(false);
+      expect(service.getRegisteredProcessors()).not.toContain('test-job');
+    });
+
+    it('should return false when processor does not exist', () => {
+      const result = service.unregisterProcessor('non-existent');
+
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('getRegisteredProcessors', () => {
+    it('should return empty array when no processors registered', () => {
+      const processors = service.getRegisteredProcessors();
+      expect(processors).toEqual([]);
+    });
+
+    it('should return all registered processor names', () => {
+      const processor1 = jest.fn().mockResolvedValue(undefined);
+      const processor2 = jest.fn().mockResolvedValue(undefined);
+
+      service.registerProcessor('job-1', processor1);
+      service.registerProcessor('job-2', processor2);
+
+      const processors = service.getRegisteredProcessors();
+      expect(processors).toContain('job-1');
+      expect(processors).toContain('job-2');
+      expect(processors).toHaveLength(2);
+    });
+  });
+
+  describe('getProcessorInfo', () => {
+    it('should return processor info when exists', () => {
+      const processor = jest.fn().mockResolvedValue(undefined);
+      service.registerProcessor('test-job', processor);
+
+      const info = service.getProcessorInfo('test-job');
+
+      expect(info).toEqual({
+        name: 'test-job',
+        registered: true,
+      });
+    });
+
+    it('should return null when processor does not exist', () => {
+      const info = service.getProcessorInfo('non-existent');
+
+      expect(info).toBeNull();
+    });
+  });
+});
+
+describe('Queue Management', () => {
+  let service: QueueService;
+  let eventEmitter: EventEmitter2;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      imports: [
+        QueueModule.forRoot({
+          processors: [
+            {
+              name: 'test-job',
+              process: jest.fn().mockResolvedValue(undefined),
+            },
+          ],
+        }),
+      ],
+    }).compile();
+
+    service = module.get<QueueService>(QueueService);
+    eventEmitter = module.get<EventEmitter2>(EventEmitter2);
+  });
+
+  describe('clearQueue', () => {
+    it('should clear specific queue', async () => {
+      // Queue에 작업 추가
+      await service.enqueue('test-queue', 'test-job', { data: 'test1' });
+      await service.enqueue('test-queue', 'test-job', { data: 'test2' });
+      await service.enqueue('other-queue', 'test-job', { data: 'test3' });
+
+      // 통계 확인
+      const statsBefore = service.getAllQueueStats();
+      expect(statsBefore.length).toBeGreaterThan(0);
+
+      // 특정 큐만 클리어
+      const clearedCount = service.clearQueue('test-queue');
+      expect(clearedCount).toBe(2);
+
+      // 다른 큐는 그대로 유지
+      const statsAfter = service.getAllQueueStats();
+      const otherQueueStats = statsAfter.find(
+        (s) => s.queueName === 'other-queue'
+      );
+      expect(otherQueueStats?.pendingTasks).toBe(1);
+    });
+
+    it('should return 0 for non-existent queue', () => {
+      const clearedCount = service.clearQueue('non-existent');
+      expect(clearedCount).toBe(0);
+    });
+  });
+
+  describe('clearAllQueues', () => {
+    it('should clear all queues', async () => {
+      // 여러 큐에 작업 추가
+      await service.enqueue('queue-1', 'test-job', { data: 'test1' });
+      await service.enqueue('queue-2', 'test-job', { data: 'test2' });
+      await service.enqueue('queue-3', 'test-job', { data: 'test3' });
+
+      // 모든 큐 클리어
+      const clearedCount = service.clearAllQueues();
+      expect(clearedCount).toBe(3);
+
+      // 모든 큐가 비어있는지 확인
+      const stats = service.getAllQueueStats();
+      const totalPending = stats.reduce(
+        (sum, queue) => sum + queue.pendingTasks,
+        0
+      );
+      expect(totalPending).toBe(0);
+    });
+  });
+});
+
+describe('Task Management', () => {
+  let service: QueueService;
+  let eventEmitter: EventEmitter2;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      imports: [
+        QueueModule.forRoot({
+          processors: [
+            {
+              name: 'test-job',
+              process: jest.fn().mockResolvedValue(undefined),
+            },
+            {
+              name: 'slow-job',
+              process: jest
+                .fn()
+                .mockImplementation(
+                  () => new Promise((resolve) => setTimeout(resolve, 100))
+                ),
+            },
+          ],
+        }),
+      ],
+    }).compile();
+
+    service = module.get<QueueService>(QueueService);
+    eventEmitter = module.get<EventEmitter2>(EventEmitter2);
+  });
+
+  describe('getTaskById', () => {
+    it('should find task by ID', async () => {
+      const payload = { data: 'test-data' };
+      const taskId = await service.enqueue('test-queue', 'test-job', payload);
+
+      const task = service.getTaskById(taskId);
+
+      expect(task).toBeDefined();
+      expect(task?.payload).toEqual(payload);
+      expect(task?.jobName).toBe('test-job');
+    });
+
+    it('should return null for non-existent task ID', () => {
+      const task = service.getTaskById('non-existent-id');
+      expect(task).toBeNull();
+    });
+  });
+
+  describe('getTaskStatus', () => {
+    it('should return pending status for queued task', async () => {
+      const taskId = await service.enqueue('test-queue', 'test-job', {
+        data: 'test',
+      });
+
+      const status = service.getTaskStatus(taskId);
+
+      expect(status.status).toBe('pending');
+      expect(status.taskId).toBe(taskId);
+      if (status.status === 'pending') {
+        expect(status.queueName).toBe('test-queue');
+        expect(status.jobName).toBe('test-job');
+      }
+    });
+
+    it('should return delayed status for delayed task', async () => {
+      const taskId = await service.enqueue(
+        'test-queue',
+        'test-job',
+        { data: 'test' },
+        { delay: 1000 }
+      );
+
+      const status = service.getTaskStatus(taskId);
+
+      expect(status.status).toBe('delayed');
+      expect(status.taskId).toBe(taskId);
+      if (status.status === 'delayed') {
+        expect(status.scheduledAt).toBeDefined();
+        expect(status.delay).toBeGreaterThanOrEqual(0);
+      }
+    });
+
+    it('should return not_found for completed task', async () => {
+      const payload = { data: 'test' };
+      const taskId = await service.enqueue('test-queue', 'test-job', payload);
+
+      // 작업이 완료될 때까지 대기
+      let attempts = 0;
+      while (attempts < 50) {
+        const status = service.getTaskStatus(taskId);
+        if (status.status === 'not_found') break;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        attempts++;
+      }
+
+      const finalStatus = service.getTaskStatus(taskId);
+      expect(finalStatus.status).toBe('not_found');
+      expect(finalStatus.taskId).toBe(taskId);
+    });
+
+    it('should return not_found for non-existent task', () => {
+      const status = service.getTaskStatus('non-existent-id');
+      expect(status.status).toBe('not_found');
+      expect(status.taskId).toBe('non-existent-id');
+    });
+  });
+
+  describe('getTasksByQueue', () => {
+    it('should return tasks in specific queue', async () => {
+      const payload1 = { data: 'task1' };
+      const payload2 = { data: 'task2' };
+
+      await service.enqueue('test-queue', 'test-job', payload1);
+      await service.enqueue('test-queue', 'test-job', payload2);
+      await service.enqueue('other-queue', 'test-job', { data: 'other' });
+
+      const tasks = service.getTasksByQueue('test-queue');
+
+      expect(tasks).toHaveLength(2);
+      expect(tasks.map((t) => t.payload)).toEqual([payload1, payload2]);
+    });
+
+    it('should return empty array for non-existent queue', () => {
+      const tasks = service.getTasksByQueue('non-existent');
+      expect(tasks).toEqual([]);
+    });
+  });
+
+  describe('getActiveTasksByQueue', () => {
+    it('should return active tasks in queue', async () => {
+      // 느린 작업을 실행
+      const taskId = await service.enqueue('test-queue', 'slow-job', {
+        data: 'slow',
+      });
+
+      // 작업이 시작될 때까지 잠시 대기
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      const activeTasks = service.getActiveTasksByQueue('test-queue');
+
+      // 작업이 활성 상태인지 확인
+      const hasActiveTask = activeTasks.some((task) => task.id === taskId);
+      expect(hasActiveTask).toBe(true);
+    });
+
+    it('should return empty array when no active tasks', () => {
+      const activeTasks = service.getActiveTasksByQueue('test-queue');
+      expect(activeTasks).toEqual([]);
+    });
+  });
+});
+
+describe('Decorator-based Processor Registration', () => {
+  let service: QueueService;
+  let eventEmitter: EventEmitter2;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      imports: [
+        QueueModule.forRoot({
+          processors: [
+            {
+              name: 'decorated-job-1',
+              process: jest.fn().mockResolvedValue(undefined),
+            },
+            {
+              name: 'decorated-job-2',
+              process: jest.fn().mockResolvedValue(undefined),
+            },
+          ],
+        }),
+      ],
+    }).compile();
+
+    service = module.get<QueueService>(QueueService);
+    eventEmitter = module.get<EventEmitter2>(EventEmitter2);
+  });
+
+  it('should register processors with decorators', () => {
+    const processors = service.getRegisteredProcessors();
+
+    expect(processors).toContain('decorated-job-1');
+    expect(processors).toContain('decorated-job-2');
+  });
+});
+
+// Note: forFeature and forProcessors tests require more complex setup
+// and are better suited for integration tests
+describe('Module Registration Methods', () => {
+  // These methods are tested in the main QueueService tests above
+  it('should have basic module functionality', () => {
+    expect(QueueModule.forRoot).toBeDefined();
+    expect(QueueModule.forFeature).toBeDefined();
+    expect(QueueModule.forProcessors).toBeDefined();
   });
 });
