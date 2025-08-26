@@ -954,7 +954,7 @@ If you have any questions or need help:
 
 ## 📋 Version History
 
-### v2.1.0 (Current)
+### v2.1.1 (Current)
 
 **Enhanced Type Safety & Test Coverage**
 
