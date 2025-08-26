@@ -1159,7 +1159,6 @@ describe('Task Management', () => {
 
 describe('Decorator-based Processor Registration', () => {
   let service: QueueService;
-  let eventEmitter: EventEmitter2;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -1180,7 +1179,6 @@ describe('Decorator-based Processor Registration', () => {
     }).compile();
 
     service = module.get<QueueService>(QueueService);
-    eventEmitter = module.get<EventEmitter2>(EventEmitter2);
   });
 
   it('should register processors with decorators', () => {
