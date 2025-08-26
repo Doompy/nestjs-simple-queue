@@ -1013,26 +1013,26 @@ describe('Task Management', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       imports: [
-            QueueModule.forRoot({
-      processors: [
-        {
-          name: 'test-job',
-          process: jest.fn().mockResolvedValue(undefined),
-        },
-        {
-          name: 'slow-job',
-          process: jest
-            .fn()
-            .mockImplementation(
-              () => new Promise((resolve) => setTimeout(resolve, 100))
-            ),
-        },
+        QueueModule.forRoot({
+          processors: [
+            {
+              name: 'test-job',
+              process: jest.fn().mockResolvedValue(undefined),
+            },
+            {
+              name: 'slow-job',
+              process: jest
+                .fn()
+                .mockImplementation(
+                  () => new Promise((resolve) => setTimeout(resolve, 100))
+                ),
+            },
+          ],
+        }),
       ],
-    }),
-  ],
-}).compile();
+    }).compile();
 
-service = module.get<QueueService>(QueueService);
+    service = module.get<QueueService>(QueueService);
   });
 
   describe('getTaskById', () => {
