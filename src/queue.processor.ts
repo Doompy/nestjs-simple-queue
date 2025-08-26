@@ -26,7 +26,7 @@ export function QueueJob(jobName: string) {
 /**
  * Mixin for auto-registering processors
  */
-export function withQueueProcessors<T extends new (...args: any[]) => {}>(
+export function withQueueProcessors<T extends new (...args: any[]) => object>(
   Base: T
 ) {
   return class extends Base {
