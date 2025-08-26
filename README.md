@@ -954,17 +954,30 @@ If you have any questions or need help:
 
 ## 📋 Version History
 
-### v2.0.0 (Current)
+### v2.1.0 (Current)
 
-- **BREAKING CHANGES**: Job-based architecture replacing function-based tasks
+**Enhanced Type Safety & Test Coverage**
+
+- **Enhanced Task Status System**: Type-safe status management with structured status interfaces
+- **Comprehensive Test Coverage**: Improved from 40.5% to 59.77% (+19.27%)
+- **Enhanced TypeScript Support**: Better interface definitions and type guards
+- **Code Quality**: Resolved all linter errors and improved code formatting
+
+### v2.0.0
+
+**BREAKING CHANGES: Job-based architecture replacing function-based tasks**
+
 - **New Features**: Delayed jobs, task cancellation, state persistence, graceful shutdown
 - **Enhanced**: Priority queue, concurrent processing, comprehensive event system
+- **Migration Required**: API changes from function-based to processor-based system
 
 ### v1.x
 
-- Function-based task processing
+**Function-based task processing**
+
 - Basic retry mechanism and event emission
 - Priority queue support
+- Simple in-memory queue management
 
 > **For detailed changelog and migration guide, see [GitHub Releases](https://github.com/Doompy/nestjs-simple-queue/releases)**
 
