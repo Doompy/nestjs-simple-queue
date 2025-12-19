@@ -1230,8 +1230,9 @@ describe('Task Management', () => {
         { email: 'a@test.com', subject: 'A' },
         { email: 'b@test.com', subject: 'B' },
       ]);
-      expect(restoredTasks.every((task) => task.queueName === 'persist-queue'))
-        .toBe(true);
+      expect(
+        restoredTasks.every((task) => task.queueName === 'persist-queue')
+      ).toBe(true);
 
       if (fs.existsSync(persistencePath)) {
         fs.unlinkSync(persistencePath);
@@ -1275,13 +1276,17 @@ describe('Task Management', () => {
 
       const pendingService = pendingModule.get<QueueService>(QueueService);
 
-      await pendingService.enqueue('delayed-queue', 'persisted-delayed-email', {
-        email: 'delay@test.com',
-        subject: 'Delayed',
-      },
-      {
-        delay: 200,
-      });
+      await pendingService.enqueue(
+        'delayed-queue',
+        'persisted-delayed-email',
+        {
+          email: 'delay@test.com',
+          subject: 'Delayed',
+        },
+        {
+          delay: 200,
+        }
+      );
 
       await (pendingService as any).savePersistedState();
       await pendingModule.close();
@@ -1302,7 +1307,10 @@ describe('Task Management', () => {
       await restoreService.onModuleInit();
 
       let attempts = 0;
-      while (localEmailProcessor.processedPayloads.length === 0 && attempts < 50) {
+      while (
+        localEmailProcessor.processedPayloads.length === 0 &&
+        attempts < 50
+      ) {
         await new Promise((resolve) => setTimeout(resolve, 20));
         attempts++;
       }
