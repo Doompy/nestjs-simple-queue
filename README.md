@@ -15,6 +15,39 @@ NestJS Simple Queue is a lightweight, in-memory task queue for NestJS services. 
 - Configurable concurrency with graceful shutdown handling
 - Event hooks for task lifecycle events (start, success, failure, cancellation)
 
+---
+
+## When should I use this?
+
+**nestjs-simple-queue is a good fit if:**
+
+- You need background jobs inside a single NestJS service
+- You want retries, delays, and priorities **without introducing Redis**
+- You want predictable behavior during shutdowns and restarts
+- You prefer keeping queue logic close to your domain code
+- You want minimal setup and low operational overhead
+
+**You may want Bull/BullMQ instead if:**
+
+- You need distributed workers across multiple processes or machines
+- You require horizontal scaling
+- You need a web-based dashboard or advanced monitoring
+- Your queue must survive process crashes without file-based persistence
+
+---
+
+## Comparison with Bull/BullMQ
+
+| Feature | nestjs-simple-queue | Bull / BullMQ |
+|------|---------------------|---------------|
+| External dependency | None | Redis |
+| Persistence | Optional (file-based) | Redis |
+| Distributed workers | ❌ | ✅ |
+| Setup complexity | Very low | Medium |
+| Best use case | In-service background jobs | Large-scale job systems |
+
+---
+
 ## Requirements
 
 - Node.js 16+ (tested with NestJS 8–11)
@@ -148,6 +181,13 @@ QueueModule.forRoot({
 - `persistencePath` (string) – where to write the state file (default: `./queue-state.json`)
 - `processors` (array) – static processor list if you prefer manual registration
 - `logger` – optional custom logger implementation
+
+## Production notes
+
+- Jobs are kept in memory by default.
+- Enable persistence if jobs must survive restarts.
+- Designed for I/O-bound background tasks.
+- Avoid long-running CPU-bound jobs.
 
 ## Development
 
