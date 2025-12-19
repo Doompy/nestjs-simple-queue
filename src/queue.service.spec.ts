@@ -3,6 +3,9 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { QueueService } from './queue.service';
 import { QueueModule } from './queue.module';
 import { TaskPriority, QueueProcessor } from './queue.interface';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 
 // Jest 전역 타임아웃 설정 (30초)
 jest.setTimeout(30000);
@@ -1153,6 +1156,166 @@ describe('Task Management', () => {
     it('should return empty array when no active tasks', () => {
       const activeTasks = service.getActiveTasksByQueue('test-queue');
       expect(activeTasks).toEqual([]);
+    });
+  });
+
+  describe('State persistence', () => {
+    it('should restore pending tasks from saved state', async () => {
+      const persistencePath = path.join(
+        os.tmpdir(),
+        `queue-state-${Date.now()}.json`
+      );
+
+      const localEmailProcessor = new TestEmailProcessor();
+
+      const processors: QueueProcessor[] = [
+        {
+          name: 'persisted-email',
+          process: localEmailProcessor.process.bind(localEmailProcessor),
+        },
+      ];
+
+      const mockLogger = {
+        log: jest.fn(),
+        error: jest.fn(),
+        warn: jest.fn(),
+        debug: jest.fn(),
+        verbose: jest.fn(),
+      };
+
+      const pendingModule: TestingModule = await Test.createTestingModule({
+        imports: [
+          QueueModule.forRoot({
+            processors,
+            enablePersistence: true,
+            persistencePath,
+            concurrency: 0,
+            logger: mockLogger as any,
+          }),
+        ],
+      }).compile();
+
+      const pendingService = pendingModule.get<QueueService>(QueueService);
+
+      await pendingService.enqueue('persist-queue', 'persisted-email', {
+        email: 'a@test.com',
+        subject: 'A',
+      });
+      await pendingService.enqueue('persist-queue', 'persisted-email', {
+        email: 'b@test.com',
+        subject: 'B',
+      });
+
+      await (pendingService as any).savePersistedState();
+
+      const restoreModule: TestingModule = await Test.createTestingModule({
+        imports: [
+          QueueModule.forRoot({
+            processors,
+            enablePersistence: true,
+            persistencePath,
+            concurrency: 0,
+            logger: mockLogger as any,
+          }),
+        ],
+      }).compile();
+
+      const restoreService = restoreModule.get<QueueService>(QueueService);
+      await restoreService.onModuleInit();
+
+      const restoredTasks = restoreService.getTasksByQueue('persist-queue');
+
+      expect(restoredTasks).toHaveLength(2);
+      expect(restoredTasks.map((task) => task.payload)).toEqual([
+        { email: 'a@test.com', subject: 'A' },
+        { email: 'b@test.com', subject: 'B' },
+      ]);
+      expect(restoredTasks.every((task) => task.queueName === 'persist-queue'))
+        .toBe(true);
+
+      if (fs.existsSync(persistencePath)) {
+        fs.unlinkSync(persistencePath);
+      }
+    });
+
+    it('should restore delayed tasks with proper execution callbacks', async () => {
+      const persistencePath = path.join(
+        os.tmpdir(),
+        `queue-state-delayed-${Date.now()}.json`
+      );
+
+      const localEmailProcessor = new TestEmailProcessor();
+
+      const processors: QueueProcessor[] = [
+        {
+          name: 'persisted-delayed-email',
+          process: localEmailProcessor.process.bind(localEmailProcessor),
+        },
+      ];
+
+      const mockLogger = {
+        log: jest.fn(),
+        error: jest.fn(),
+        warn: jest.fn(),
+        debug: jest.fn(),
+        verbose: jest.fn(),
+      };
+
+      const pendingModule: TestingModule = await Test.createTestingModule({
+        imports: [
+          QueueModule.forRoot({
+            processors,
+            enablePersistence: true,
+            persistencePath,
+            concurrency: 0,
+            logger: mockLogger as any,
+          }),
+        ],
+      }).compile();
+
+      const pendingService = pendingModule.get<QueueService>(QueueService);
+
+      await pendingService.enqueue('delayed-queue', 'persisted-delayed-email', {
+        email: 'delay@test.com',
+        subject: 'Delayed',
+      },
+      {
+        delay: 200,
+      });
+
+      await (pendingService as any).savePersistedState();
+      await pendingModule.close();
+
+      const restoreModule: TestingModule = await Test.createTestingModule({
+        imports: [
+          QueueModule.forRoot({
+            processors,
+            enablePersistence: true,
+            persistencePath,
+            concurrency: 1,
+            logger: mockLogger as any,
+          }),
+        ],
+      }).compile();
+
+      const restoreService = restoreModule.get<QueueService>(QueueService);
+      await restoreService.onModuleInit();
+
+      let attempts = 0;
+      while (localEmailProcessor.processedPayloads.length === 0 && attempts < 50) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        attempts++;
+      }
+
+      expect(localEmailProcessor.processedPayloads).toEqual([
+        { email: 'delay@test.com', subject: 'Delayed' },
+      ]);
+
+      await restoreModule.close();
+
+      if (fs.existsSync(persistencePath)) {
+        fs.unlinkSync(persistencePath);
+      }
     });
   });
 });

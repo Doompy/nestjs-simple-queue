@@ -34,6 +34,20 @@ export class QueueService
   private isShuttingDown = false;
   private processors = new Map<string, (payload: any) => Promise<void>>(); // Job 프로세서 맵
 
+  private ensureQueueInitialized(queueName: string): void {
+    if (!this.queues.has(queueName)) {
+      this.queues.set(queueName, []);
+    }
+
+    if (!this.activeTasks.has(queueName)) {
+      this.activeTasks.set(queueName, 0);
+    }
+
+    if (!this.currentTasks.has(queueName)) {
+      this.currentTasks.set(queueName, []);
+    }
+  }
+
   constructor(
     @Inject('QUEUE_OPTIONS') private options: QueueModuleOptions,
     private eventEmitter: EventEmitter2
@@ -725,51 +739,79 @@ export class QueueService
 
       // Restore queue state (don't restore running tasks)
       if (state.queues) {
-        for (const [queueName] of state.queues) {
-          this.queues.set(queueName, []);
+        for (const [queueName, serializedTasks] of state.queues) {
+          const queue: Task<any>[] = [];
+
+          if (Array.isArray(serializedTasks)) {
+            for (const serializedTask of serializedTasks) {
+              const task = await this.deserializeTask(serializedTask);
+              if (task) {
+                task.queueName = queueName;
+                queue.push(task);
+              }
+            }
+
+            // Ensure restored tasks respect priority ordering
+            this.sortQueueByPriority(queue);
+          }
+
+          this.queues.set(queueName, queue);
           this.activeTasks.set(queueName, 0);
           this.currentTasks.set(queueName, []);
+
+          if (queue.length > 0) {
+            setImmediate(() => this.processQueue(queueName));
+          }
         }
       }
 
       // Restore delayed tasks and reset timers
       if (state.delayedTasks) {
         for (const [taskId, taskData] of state.delayedTasks) {
-          if (taskData.scheduledAt) {
-            const scheduledTime = new Date(taskData.scheduledAt);
-            const now = new Date();
-            const remainingDelay = scheduledTime.getTime() - now.getTime();
+          if (!taskData.scheduledAt) {
+            continue;
+          }
 
-            if (remainingDelay > 0) {
-              // Restore delayed task that hasn't reached execution time yet
-              this.delayedTasks.set(taskId, {
-                ...taskData,
-                scheduledAt: scheduledTime,
-              });
+          const deserializedTask = await this.deserializeTask(taskData);
+          if (!deserializedTask) {
+            continue;
+          }
 
-              // Reset timer
-              setTimeout(() => {
-                this.addDelayedTaskToQueue(
-                  taskData.queueName || 'default',
-                  taskData
-                );
-              }, remainingDelay);
+          const queueName = taskData.queueName || 'default';
+          deserializedTask.queueName = queueName;
 
-              this.logger.log(
-                `Restored delayed task ${taskId} with ${remainingDelay}ms remaining`
-              );
-            } else {
-              // Add overdue delayed task to queue immediately
-              const queueName = taskData.queueName || 'default';
-              const queue = this.queues.get(queueName) || [];
-              queue.push(taskData);
-              this.queues.set(queueName, queue);
+          this.ensureQueueInitialized(queueName);
 
-              this.logger.log(
-                `Restored overdue delayed task ${taskId} to queue immediately`
-              );
-              this.processQueue(queueName);
-            }
+          const scheduledTime = new Date(taskData.scheduledAt);
+          const now = new Date();
+          const remainingDelay = scheduledTime.getTime() - now.getTime();
+
+          if (remainingDelay > 0) {
+            // Restore delayed task that hasn't reached execution time yet
+            this.delayedTasks.set(taskId, {
+              ...deserializedTask,
+              scheduledAt: scheduledTime,
+            });
+
+            // Reset timer
+            setTimeout(() => {
+              this.addDelayedTaskToQueue(queueName, deserializedTask);
+            }, remainingDelay);
+
+            this.logger.log(
+              `Restored delayed task ${taskId} with ${remainingDelay}ms remaining`
+            );
+          } else {
+            // Add overdue delayed task to queue immediately
+            const queue = this.queues.get(queueName) || [];
+            queue.push(deserializedTask);
+            this.sortQueueByPriority(queue);
+            this.queues.set(queueName, queue);
+
+            this.logger.log(
+              `Restored overdue delayed task ${taskId} to queue immediately`
+            );
+            this.processQueue(queueName);
           }
         }
       }
