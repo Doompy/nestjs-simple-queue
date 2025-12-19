@@ -11,6 +11,7 @@ module.exports = {
     '!src/**/*.spec.ts',
     '!src/**/*.test.ts',
   ],
+  coverageProvider: 'v8',
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
 

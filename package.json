@@ -59,8 +59,12 @@
     "ts-jest": "^29.4.1",
     "typescript": "^5.9.2"
   },
+  "overrides": {
+    "glob": "11.1.0",
+    "js-yaml": "4.1.1"
+  },
   "engines": {
-    "node": ">=16.0.0"
+    "node": ">=20.0.0"
   },
   "publishConfig": {
     "registry": "https://registry.npmjs.org/"
