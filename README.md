@@ -51,7 +51,7 @@ NestJS Simple Queue is a lightweight, in-memory task queue for NestJS services. 
 
 ## Requirements
 
-- Node.js 16+ (tested with NestJS 8–11)
+- Node.js 20+ (tested with NestJS 8–11)
 - `@nestjs/common` and `@nestjs/event-emitter` as peer dependencies
 
 ## Installation

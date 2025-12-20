@@ -7,10 +7,10 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
-// Jest ?꾩뿭 ??꾩븘???ㅼ젙 (30珥?
+// NOTE: comment removed (non-ASCII).
 jest.setTimeout(30000);
 
-// ?뚯뒪?몄슜 Job ?꾨줈?몄꽌
+// NOTE: comment removed (non-ASCII).
 class TestEmailProcessor {
   public processedPayloads: any[] = [];
   public failCount = 0;
@@ -57,13 +57,13 @@ class TestFailingProcessor {
   reset() {
     this.processedPayloads = [];
     this.failCount = 0;
-    this.shouldFail = true; // ??긽 ?ㅽ뙣?섎룄濡??좎?
+    this.shouldFail = true; // NOTE: comment removed (non-ASCII).
   }
 }
 
 class TestSlowProcessor {
   async process(_payload: any): Promise<void> {
-    await new Promise((resolve) => setTimeout(resolve, 10)); // 10ms濡??⑥텞
+    await new Promise((resolve) => setTimeout(resolve, 10)); // NOTE: comment removed (non-ASCII).
     console.log('Slow task completed');
   }
 }
@@ -91,7 +91,7 @@ describe('QueueService (Job-based)', () => {
     paymentProcessor = new TestPaymentProcessor();
     failingProcessor = new TestFailingProcessor();
 
-    // ?꾨줈?몄꽌 ?깅줉
+    // NOTE: comment removed (non-ASCII).
     const processors: QueueProcessor[] = [
       {
         name: 'send-email',
@@ -119,10 +119,10 @@ describe('QueueService (Job-based)', () => {
     service = module.get<QueueService>(QueueService);
     eventEmitter = module.get<EventEmitter2>(EventEmitter2);
 
-    // eventEmitter.emit??spy濡?媛먯떥湲?
+    // NOTE: comment removed (non-ASCII).
     jest.spyOn(eventEmitter, 'emit');
 
-    // 媛??뚯뒪???쒖옉 ???꾨줈?몄꽌 ?곹깭 珥덇린??
+    // NOTE: comment removed (non-ASCII).
     emailProcessor.reset();
     paymentProcessor.reset();
     failingProcessor.reset();
@@ -143,7 +143,7 @@ describe('QueueService (Job-based)', () => {
         payload
       );
 
-      // ?묒뾽???꾨즺???뚭퉴吏 ?대쭅
+      // NOTE: comment removed (non-ASCII).
       let attempts = 0;
       while (emailProcessor.processedPayloads.length === 0 && attempts < 50) {
         await new Promise((resolve) => setTimeout(resolve, 10));
@@ -171,7 +171,7 @@ describe('QueueService (Job-based)', () => {
         paymentPayload
       );
 
-      // ???묒뾽??紐⑤몢 ?꾨즺???뚭퉴吏 ?대쭅
+      // NOTE: comment removed (non-ASCII).
       let attempts = 0;
       while (
         (emailProcessor.processedPayloads.length === 0 ||
@@ -192,7 +192,7 @@ describe('QueueService (Job-based)', () => {
       expect(paymentProcessor.processedPayloads[0]).toEqual(paymentPayload);
     });
 
-    // ?ъ떆?꾩? ?ㅽ뙣 泥섎━ 湲곕뒫? ?묐룞?섏?留??뚯뒪???섍꼍?먯꽌 遺덉븞?뺥븯誘濡?二쇱꽍 泥섎━
+    // NOTE: comment removed (non-ASCII).
     // it('should retry failed jobs', async () => { ... });
     // it('should handle job failures gracefully', async () => { ... });
 
@@ -217,7 +217,7 @@ describe('QueueService (Job-based)', () => {
 
       await service.enqueue(queueName, 'send-email', payload);
 
-      // ?묒뾽???꾨즺???뚭퉴吏 ?대쭅
+      // NOTE: comment removed (non-ASCII).
       let attempts = 0;
       while (emailProcessor.processedPayloads.length === 0 && attempts < 50) {
         await new Promise((resolve) => setTimeout(resolve, 10));
@@ -243,7 +243,7 @@ describe('QueueService (Job-based)', () => {
         userId: 'userB',
       });
 
-      // ???묒뾽??紐⑤몢 ?꾨즺???뚭퉴吏 ?대쭅
+      // NOTE: comment removed (non-ASCII).
       let attempts = 0;
       while (
         (emailProcessor.processedPayloads.length === 0 ||
@@ -269,7 +269,7 @@ describe('QueueService (Job-based)', () => {
     it('should process high priority jobs first', async () => {
       const executionOrder: string[] = [];
 
-      // ?ㅽ뻾 ?쒖꽌瑜?異붿쟻?섎뒗 ?꾨줈?몄꽌
+      // NOTE: comment removed (non-ASCII).
       const trackingProcessor = {
         async process(payload: { priority: string }): Promise<void> {
           executionOrder.push(payload.priority);
@@ -279,7 +279,7 @@ describe('QueueService (Job-based)', () => {
 
       jest.spyOn(trackingProcessor, 'process');
 
-      // ?덈줈???꾨줈?몄꽌濡??쒕퉬???ъ깮??
+      // NOTE: comment removed (non-ASCII).
       const module: TestingModule = await Test.createTestingModule({
         imports: [
           QueueModule.forRoot({
@@ -293,7 +293,7 @@ describe('QueueService (Job-based)', () => {
       const priorityService = module.get<QueueService>(QueueService);
       const priorityEventEmitter = module.get<EventEmitter2>(EventEmitter2);
 
-      // 紐⑤뱺 ?묒뾽 ?꾨즺瑜?湲곕떎由щ뒗 Promise
+      // NOTE: comment removed (non-ASCII).
       const allCompletedPromise = new Promise<void>((resolve) => {
         let completedCount = 0;
         const listener = () => {
@@ -306,7 +306,7 @@ describe('QueueService (Job-based)', () => {
         priorityEventEmitter.on('queue.task.success', listener);
       });
 
-      // ??? ?곗꽑?쒖쐞遺???믪? ?곗꽑?쒖쐞源뚯? ?쒖꽌?濡?異붽?
+      // NOTE: comment removed (non-ASCII).
       const promises = [
         priorityService.enqueue(
           'priority-queue',
@@ -346,7 +346,7 @@ describe('QueueService (Job-based)', () => {
 
       const payload = { data: 'default-priority-test' };
 
-      // ?깃났 ?대깽???湲?
+      // NOTE: comment removed (non-ASCII).
       const successPromise = new Promise<void>((resolve) => {
         eventEmitter.once('queue.task.success', resolve);
       });
@@ -392,7 +392,7 @@ describe('QueueService (Job-based)', () => {
         { priority: TaskPriority.URGENT }
       );
 
-      // 紐⑤뱺 ?묒뾽???꾨즺???뚭퉴吏 ?대쭅
+      // NOTE: comment removed (non-ASCII).
       let attempts = 0;
       while (executionOrder.length < 4 && attempts < 100) {
         await new Promise((resolve) => setTimeout(resolve, 10));
@@ -423,7 +423,7 @@ describe('QueueService (Job-based)', () => {
 
       jest.spyOn(trackingProcessor, 'process');
 
-      // ?덈줈???꾨줈?몄꽌濡??쒕퉬???ъ깮??
+      // NOTE: comment removed (non-ASCII).
       const module: TestingModule = await Test.createTestingModule({
         imports: [
           QueueModule.forRoot({
@@ -438,7 +438,7 @@ describe('QueueService (Job-based)', () => {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const priorityEventEmitter = module.get<EventEmitter2>(EventEmitter2);
 
-      // queue1: ??? ?곗꽑?쒖쐞遺??
+      // NOTE: comment removed (non-ASCII).
       await priorityService.enqueue(
         'queue1',
         'track-job',
@@ -452,7 +452,7 @@ describe('QueueService (Job-based)', () => {
         { priority: TaskPriority.HIGH }
       );
 
-      // queue2: ?믪? ?곗꽑?쒖쐞遺??
+      // NOTE: comment removed (non-ASCII).
       await priorityService.enqueue(
         'queue2',
         'track-job',
@@ -466,7 +466,7 @@ describe('QueueService (Job-based)', () => {
         { priority: TaskPriority.LOW }
       );
 
-      // 異붽? ?묒뾽??
+      // NOTE: comment removed (non-ASCII).
       await priorityService.enqueue(
         'queue1',
         'track-job',
@@ -480,7 +480,7 @@ describe('QueueService (Job-based)', () => {
         { priority: TaskPriority.NORMAL }
       );
 
-      // 紐⑤뱺 ?묒뾽???꾨즺???뚭퉴吏 ?대쭅
+      // NOTE: comment removed (non-ASCII).
       let attempts = 0;
       while (
         (queue1Order.length < 3 || queue2Order.length < 3) &&
@@ -490,7 +490,7 @@ describe('QueueService (Job-based)', () => {
         attempts++;
       }
 
-      // 媛??먮뒗 ?낅┰?곸쑝濡??곗꽑?쒖쐞瑜?泥섎━
+      // NOTE: comment removed (non-ASCII).
       expect(queue1Order).toEqual(['high', 'normal', 'low']);
       expect(queue2Order).toEqual(['high', 'normal', 'low']);
     });
@@ -508,17 +508,17 @@ describe('QueueService (Job-based)', () => {
         'send-email',
         payload,
         {
-          delay: 100, // 100ms濡??⑥텞
+          delay: 100, // NOTE: comment removed (non-ASCII).
         }
       );
 
-      // 吏???쒓컙 ?꾩뿉???ㅽ뻾?섏? ?딆쓬
+      // NOTE: comment removed (non-ASCII).
       expect(emailProcessor.processedPayloads).toHaveLength(0);
 
-      // 吏???쒓컙留뚰겮 ?湲?
+      // NOTE: comment removed (non-ASCII).
       await new Promise((resolve) => setTimeout(resolve, 150));
 
-      // ?묒뾽???꾨즺???뚭퉴吏 ?대쭅
+      // NOTE: comment removed (non-ASCII).
       let attempts = 0;
       while (emailProcessor.processedPayloads.length === 0 && attempts < 50) {
         await new Promise((resolve) => setTimeout(resolve, 10));
@@ -533,14 +533,14 @@ describe('QueueService (Job-based)', () => {
     it('should emit delayed event for delayed jobs', async () => {
       const payload = { email: 'delayed-event@test.com', subject: 'Event' };
 
-      // ?대깽??諛쒖깮 ?뺤씤???꾪븳 spy
+      // NOTE: comment removed (non-ASCII).
       const emitSpy = jest.spyOn(eventEmitter, 'emit');
 
       await service.enqueue('delayed-event-queue', 'send-email', payload, {
-        delay: 50, // 50ms濡??⑥텞
+        delay: 50, // NOTE: comment removed (non-ASCII).
       });
 
-      // delayed ?대깽?멸? 諛쒖깮???뚭퉴吏 ?대쭅
+      // NOTE: comment removed (non-ASCII).
       let attempts = 0;
       while (emitSpy.mock.calls.length === 0 && attempts < 50) {
         await new Promise((resolve) => setTimeout(resolve, 10));
@@ -556,7 +556,7 @@ describe('QueueService (Job-based)', () => {
     it('should track delayed jobs in statistics', async () => {
       const payload = { email: 'delayed-stats@test.com', subject: 'Stats' };
       await service.enqueue('delayed-stats-queue', 'send-email', payload, {
-        delay: 200, // 200ms濡??⑥텞
+        delay: 200, // NOTE: comment removed (non-ASCII).
       });
 
       const stats = service.getQueueStats('delayed-stats-queue');
@@ -566,7 +566,7 @@ describe('QueueService (Job-based)', () => {
     it('should return delayed jobs list', async () => {
       const payload = { email: 'delayed-list@test.com', subject: 'List' };
       await service.enqueue('delayed-list-queue', 'send-email', payload, {
-        delay: 300, // 300ms濡??⑥텞
+        delay: 300, // NOTE: comment removed (non-ASCII).
       });
 
       const delayedTasks = service.getDelayedTasks();
@@ -637,7 +637,7 @@ describe('QueueService (Job-based)', () => {
   });
 
   describe('Job Cancellation', () => {
-    // ?묒뾽 痍⑥냼 湲곕뒫? ?묐룞?섏?留??뚯뒪???섍꼍?먯꽌 遺덉븞?뺥븯誘濡?二쇱꽍 泥섎━
+    // NOTE: comment removed (non-ASCII).
     // it('should cancel pending delayed job', async () => { ... });
     // it('should handle job cancellation correctly', async () => { ... });
 
@@ -668,7 +668,7 @@ describe('QueueService (Job-based)', () => {
               concurrencyTracker.activeTasks.length
             );
 
-            await new Promise((resolve) => setTimeout(resolve, 20)); // 20ms濡??⑥텞
+            await new Promise((resolve) => setTimeout(resolve, 20)); // NOTE: comment removed (non-ASCII).
             concurrencyTracker.activeTasks.pop();
           },
         };
@@ -702,7 +702,7 @@ describe('QueueService (Job-based)', () => {
 
         await Promise.all(promises);
 
-        // 紐⑤뱺 ?묒뾽???꾨즺???뚭퉴吏 ?대쭅
+        // NOTE: comment removed (non-ASCII).
         let attempts = 0;
         while (
           concurrencyTracker.process.mock.calls.length < 5 &&
@@ -718,7 +718,7 @@ describe('QueueService (Job-based)', () => {
 
       it('should handle multiple concurrent jobs with proper tracking', async () => {
         const mockProcessor = jest.fn().mockImplementation(async () => {
-          await new Promise((resolve) => setTimeout(resolve, 20)); // 20ms濡??⑥텞
+          await new Promise((resolve) => setTimeout(resolve, 20)); // NOTE: comment removed (non-ASCII).
         });
 
         (concurrencyService as any)['processors'].set(
@@ -740,14 +740,14 @@ describe('QueueService (Job-based)', () => {
 
         await Promise.all(promises);
 
-        // 紐⑤뱺 ?묒뾽???꾨즺???뚭퉴吏 ?대쭅
+        // NOTE: comment removed (non-ASCII).
         let attempts = 0;
         while (mockProcessor.mock.calls.length < 3 && attempts < 100) {
           await new Promise((resolve) => setTimeout(resolve, 10));
           attempts++;
         }
 
-        // 異붽? ?湲??쒓컙??二쇱뼱 activeTasks媛 ?뺣━?섎룄濡???
+        // NOTE: comment removed (non-ASCII).
         await new Promise((resolve) => setTimeout(resolve, 50));
 
         const finalStats = concurrencyService.getQueueStats('multi-queue');
@@ -786,7 +786,7 @@ describe('QueueService (Job-based)', () => {
         shutdownService = module.get<QueueService>(QueueService);
         shutdownEventEmitter = module.get<EventEmitter2>(EventEmitter2);
 
-        // slowProcessor.process瑜?spy濡?媛먯떥湲?
+        // NOTE: comment removed (non-ASCII).
         jest.spyOn(slowProcessor, 'process');
       });
 
@@ -809,15 +809,15 @@ describe('QueueService (Job-based)', () => {
 
         const completionTracker = {
           async process(_payload: any): Promise<void> {
-            await new Promise((resolve) => setTimeout(resolve, 20)); // 20ms濡??⑥텞
+            await new Promise((resolve) => setTimeout(resolve, 20)); // NOTE: comment removed (non-ASCII).
             taskCompleted = true;
           },
         };
 
-        // completionTracker.process瑜?spy濡?媛먯떥湲?
+        // NOTE: comment removed (non-ASCII).
         jest.spyOn(completionTracker, 'process');
 
-        // ?덈줈???꾨줈?몄꽌濡??쒕퉬???ъ깮??
+        // NOTE: comment removed (non-ASCII).
         const module: TestingModule = await Test.createTestingModule({
           imports: [
             QueueModule.forRoot({
@@ -835,19 +835,19 @@ describe('QueueService (Job-based)', () => {
 
         const _payload = { data: 'active-task-test' };
 
-        // ?묒뾽 異붽?
+        // NOTE: comment removed (non-ASCII).
         const enqueuePromise = completionService.enqueue(
           'active-queue',
           'completion-job',
           _payload
         );
 
-        // ?묒뾽???쒖옉?섍린 ?꾩뿉 shutdown ?쒖옉
+        // NOTE: comment removed (non-ASCII).
         await new Promise((resolve) => setTimeout(resolve, 10));
         const shutdownPromise =
           completionService.onApplicationShutdown('SIGTERM');
 
-        // ?묒뾽???꾨즺???뚭퉴吏 ?대쭅
+        // NOTE: comment removed (non-ASCII).
         let attempts = 0;
         while (!taskCompleted && attempts < 100) {
           await new Promise((resolve) => setTimeout(resolve, 10));
@@ -1021,20 +1021,20 @@ describe('Queue Management', () => {
 
   describe('clearQueue', () => {
     it('should clear specific queue', async () => {
-      // Queue???묒뾽 異붽?
+      // NOTE: comment removed (non-ASCII).
       await service.enqueue('test-queue', 'test-job', { data: 'test1' });
       await service.enqueue('test-queue', 'test-job', { data: 'test2' });
       await service.enqueue('other-queue', 'test-job', { data: 'test3' });
 
-      // ?듦퀎 ?뺤씤
+      // NOTE: comment removed (non-ASCII).
       const statsBefore = service.getAllQueueStats();
       expect(statsBefore.length).toBeGreaterThan(0);
 
-      // ?뱀젙 ?먮쭔 ?대━??
+      // NOTE: comment removed (non-ASCII).
       const clearedCount = service.clearQueue('test-queue');
       expect(clearedCount).toBe(2);
 
-      // ?ㅻⅨ ?먮뒗 洹몃?濡??좎?
+      // NOTE: comment removed (non-ASCII).
       const statsAfter = service.getAllQueueStats();
       const otherQueueStats = statsAfter.find(
         (s) => s.queueName === 'other-queue'
@@ -1050,16 +1050,16 @@ describe('Queue Management', () => {
 
   describe('clearAllQueues', () => {
     it('should clear all queues', async () => {
-      // ?щ윭 ?먯뿉 ?묒뾽 異붽?
+      // NOTE: comment removed (non-ASCII).
       await service.enqueue('queue-1', 'test-job', { data: 'test1' });
       await service.enqueue('queue-2', 'test-job', { data: 'test2' });
       await service.enqueue('queue-3', 'test-job', { data: 'test3' });
 
-      // 紐⑤뱺 ???대━??
+      // NOTE: comment removed (non-ASCII).
       const clearedCount = service.clearAllQueues();
       expect(clearedCount).toBe(3);
 
-      // 紐⑤뱺 ?먭? 鍮꾩뼱?덈뒗吏 ?뺤씤
+      // NOTE: comment removed (non-ASCII).
       const stats = service.getAllQueueStats();
       const totalPending = stats.reduce(
         (sum, queue) => sum + queue.pendingTasks,
@@ -1160,7 +1160,7 @@ describe('Task Management', () => {
       const payload = { data: 'test' };
       const taskId = await service.enqueue('test-queue', 'test-job', payload);
 
-      // ?묒뾽???꾨즺???뚭퉴吏 ?湲?
+      // NOTE: comment removed (non-ASCII).
       let attempts = 0;
       while (attempts < 50) {
         const status = service.getTaskStatus(taskId);
@@ -1204,17 +1204,17 @@ describe('Task Management', () => {
 
   describe('getActiveTasksByQueue', () => {
     it('should return active tasks in queue', async () => {
-      // ?먮┛ ?묒뾽???ㅽ뻾
+      // NOTE: comment removed (non-ASCII).
       const taskId = await service.enqueue('test-queue', 'slow-job', {
         data: 'slow',
       });
 
-      // ?묒뾽???쒖옉???뚭퉴吏 ?좎떆 ?湲?
+      // NOTE: comment removed (non-ASCII).
       await new Promise((resolve) => setTimeout(resolve, 10));
 
       const activeTasks = service.getActiveTasksByQueue('test-queue');
 
-      // ?묒뾽???쒖꽦 ?곹깭?몄? ?뺤씤
+      // NOTE: comment removed (non-ASCII).
       const hasActiveTask = activeTasks.some((task) => task.id === taskId);
       expect(hasActiveTask).toBe(true);
     });

@@ -25,15 +25,15 @@ export class QueueService
 {
   private readonly logger: Logger;
   private queues = new Map<string, Task<any>[]>();
-  private currentTasks = new Map<string, Task<any>[]>(); // 큐 이름당 실행 중인 작업 배열
-  private delayedTasks = new Map<string, Task<any>>(); // 지연된 작업들
+  private currentTasks = new Map<string, Task<any>[]>(); // Running tasks per queue
+  private delayedTasks = new Map<string, Task<any>>(); // Delayed tasks
   private readonly concurrency: number;
   private activeTasks = new Map<string, number>();
   private readonly gracefulShutdownTimeout: number;
   private readonly enablePersistence: boolean;
   private readonly persistencePath: string;
   private isShuttingDown = false;
-  private processors = new Map<string, (payload: any) => Promise<void>>(); // Job 프로세서 맵
+  private processors = new Map<string, (payload: any) => Promise<void>>(); // Job processor map
 
   private ensureQueueInitialized(queueName: string): void {
     if (!this.queues.has(queueName)) {
@@ -59,7 +59,7 @@ export class QueueService
     this.enablePersistence = options.enablePersistence || false;
     this.persistencePath = options.persistencePath || './queue-state.json';
 
-    // Job 프로세서 등록
+    // Register job processors
     if (options.processors) {
       for (const processor of options.processors) {
         this.processors.set(processor.name, processor.process);
@@ -79,7 +79,7 @@ export class QueueService
     payload: T,
     options?: EnqueueOptions
   ): Promise<string> {
-    // taskId를 반환하도록 변경
+    // Return taskId to the caller
     if (this.isShuttingDown) {
       throw new Error(
         'Queue service is shutting down. Cannot enqueue new tasks.'
@@ -116,7 +116,7 @@ export class QueueService
     const scheduledAt =
       delay > 0 ? new Date(createdAt.getTime() + delay) : undefined;
 
-    // Job 프로세서 확인
+    // Validate job processor
     const processor = this.processors.get(jobName);
     if (!processor) {
       throw new Error(
@@ -143,7 +143,7 @@ export class QueueService
     };
 
     if (delay > 0) {
-      // 지연된 작업 처리 - 큐 이름을 taskData에 저장
+      // Handle delayed task - persist queue name on task data
       taskData.queueName = queueName;
       this.delayedTasks.set(taskId, taskData);
       this.eventEmitter.emit('queue.task.delayed', {
@@ -151,18 +151,18 @@ export class QueueService
         task: taskData,
       });
 
-      // 지연 시간 후에 큐에 추가
+      // Add to queue after delay
       setTimeout(() => {
         this.addDelayedTaskToQueue(queueName, taskData);
       }, delay);
     } else {
-      // 즉시 큐에 추가
+      // Add to queue immediately
       queue.push(taskData);
       this.eventEmitter.emit('queue.task.added', { queueName, task: taskData });
       setImmediate(() => this.processQueue(queueName));
     }
 
-    return taskId; // taskId 반환
+    return taskId; // Return taskId
   }
 
   /**
@@ -326,7 +326,7 @@ export class QueueService
         try {
           task.reject(error);
         } catch (rejectionError) {
-          // Promise rejection 에러를 무시 (이미 처리된 Promise일 수 있음)
+          // Ignore promise rejection errors (may already be handled)
         }
       }
     } finally {

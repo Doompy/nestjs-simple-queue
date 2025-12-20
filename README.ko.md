@@ -50,7 +50,7 @@ NestJS Simple Queue는 NestJS 서비스 내부에서 사용할 수 있는 가볍
 
 ## 요구 사항
 
-- Node.js 16+ (NestJS 8~11에서 테스트)
+- Node.js 20+ (NestJS 8~11에서 테스트)
 - `@nestjs/common`, `@nestjs/event-emitter` (peer deps)
 
 ## 설치
