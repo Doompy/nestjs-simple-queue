@@ -107,14 +107,15 @@ jobs:
       - name: Build project
         run: npm run build
 
-      - name: Debug npm auth (no secrets)
+      - name: Configure npm for OIDC
         run: |
-          echo "NODE_AUTH_TOKEN set? ${NODE_AUTH_TOKEN:+yes}"
-          echo "NPM_TOKEN set? ${NPM_TOKEN:+yes}"
-          node -e "const {execSync}=require('child_process'); let t=''; try { t=execSync('npm config get //registry.npmjs.org/:_authToken',{encoding:'utf8'}).trim(); } catch {} if (t==='undefined') t=''; console.log('npmrc token length', t.length);"
+          npm config set auth-type=oidc
+          npm config set provenance true
 
       - name: Publish to npm
         run: npm publish --provenance
+        env:
+          NODE_AUTH_TOKEN: ""
 
   release:
     runs-on: ubuntu-latest
