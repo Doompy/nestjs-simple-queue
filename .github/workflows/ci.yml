@@ -83,7 +83,6 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     env:
       NPM_CONFIG_OMIT: optional
-      NODE_AUTH_TOKEN: ""
     permissions:
       contents: read
       id-token: write
@@ -98,7 +97,6 @@ jobs:
           node-version: '24.x'
           cache: 'npm'
           registry-url: 'https://registry.npmjs.org'
-          token: ""
 
       - name: Use npm 10
         run: npm i -g npm@10
@@ -112,8 +110,15 @@ jobs:
       - name: Who am I (OIDC ping)
         run: npm ping
 
+      - name: Prepare npmrc for OIDC
+        run: |
+          rm -f "$NPM_CONFIG_USERCONFIG"
+          echo "registry=https://registry.npmjs.org/" > "$NPM_CONFIG_USERCONFIG"
+
       - name: Publish to npm
-        run: npm publish --provenance --access public
+        run: |
+          unset NODE_AUTH_TOKEN NPM_TOKEN
+          npm publish --provenance --access public
 
   release:
     runs-on: ubuntu-latest
