@@ -97,7 +97,6 @@ jobs:
           node-version: '24.x'
           cache: 'npm'
           registry-url: 'https://registry.npmjs.org'
-          always-auth: true
 
       - name: Use npm 10
         run: npm i -g npm@10
@@ -108,13 +107,8 @@ jobs:
       - name: Build project
         run: npm run build
 
-      - name: Configure npm for OIDC
-        run: |
-          npm config set auth-type=oidc
-          npm config set provenance true
-
       - name: Publish to npm
-        run: npm publish --provenance
+        run: npm publish --provenance --access public
 
   release:
     runs-on: ubuntu-latest
