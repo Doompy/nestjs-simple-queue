@@ -17,6 +17,7 @@ import {
   ProcessorManagement,
   TaskStatus,
   EnqueueOptions,
+  RateLimiterOptions,
 } from './queue.interface';
 
 @Injectable()
@@ -32,8 +33,11 @@ export class QueueService
   private readonly gracefulShutdownTimeout: number;
   private readonly enablePersistence: boolean;
   private readonly persistencePath: string;
+  private readonly limiter?: RateLimiterOptions;
   private isShuttingDown = false;
   private processors = new Map<string, (payload: any) => Promise<void>>(); // Job processor map
+  private rateLimitState = new Map<string, number[]>();
+  private rateLimitTimers = new Map<string, NodeJS.Timeout>();
 
   private ensureQueueInitialized(queueName: string): void {
     if (!this.queues.has(queueName)) {
@@ -58,6 +62,7 @@ export class QueueService
     this.gracefulShutdownTimeout = options.gracefulShutdownTimeout || 30000;
     this.enablePersistence = options.enablePersistence || false;
     this.persistencePath = options.persistencePath || './queue-state.json';
+    this.limiter = options.limiter;
 
     // Register job processors
     if (options.processors) {
@@ -190,7 +195,7 @@ export class QueueService
         const task = queue.splice(taskIndex, 1)[0];
         try {
           task.reject(new Error('Task cancelled'));
-        } catch (error) {
+        } catch {
           // Ignore Promise reject errors (Promise might already be handled)
         }
         this.eventEmitter.emit('queue.task.cancelled', { queueName, task });
@@ -204,7 +209,7 @@ export class QueueService
       this.delayedTasks.delete(taskId);
       try {
         delayedTask.reject(new Error('Task cancelled'));
-      } catch (error) {
+      } catch {
         // Ignore Promise reject errors (Promise might already be handled)
       }
       this.eventEmitter.emit('queue.task.cancelled', {
@@ -253,6 +258,12 @@ export class QueueService
 
     // Check concurrency limit and if queue has tasks
     if (!queue || queue.length === 0 || active >= this.concurrency) {
+      return;
+    }
+
+    const rateLimitDelay = this.getRateLimitDelay(queueName, queue[0]);
+    if (rateLimitDelay > 0) {
+      this.scheduleRateLimitRetry(queueName, rateLimitDelay);
       return;
     }
 
@@ -325,7 +336,7 @@ export class QueueService
       } else {
         try {
           task.reject(error);
-        } catch (rejectionError) {
+        } catch {
           // Ignore promise rejection errors (may already be handled)
         }
       }
@@ -351,6 +362,70 @@ export class QueueService
         this.eventEmitter.emit('queue.empty', { queueName });
       }
     }
+  }
+
+  /**
+   * Calculate rate limit delay for a queue
+   */
+  private getRateLimitDelay(queueName: string, task?: Task<any>): number {
+    if (!this.limiter) return 0;
+
+    const { max, duration } = this.limiter;
+    if (max <= 0 || duration <= 0) return 0;
+
+    const now = Date.now();
+    const windowStart = now - duration;
+    const key = this.getRateLimitKey(queueName, task);
+    const timestamps = this.rateLimitState.get(key) || [];
+    const recent = timestamps.filter((timestamp) => timestamp > windowStart);
+    this.rateLimitState.set(key, recent);
+
+    if (recent.length < max) {
+      recent.push(now);
+      return 0;
+    }
+
+    const earliest = Math.min(...recent);
+    return Math.max(1, earliest + duration - now);
+  }
+
+  /**
+   * Build a rate limit key for the queue, optionally scoped by groupKey
+   */
+  private getRateLimitKey(queueName: string, task?: Task<any>): string {
+    if (!this.limiter?.groupKey || !task) return queueName;
+
+    const groupKey = this.limiter.groupKey;
+    const value = this.getNestedValue(task.payload, groupKey);
+    if (value === undefined || value === null || value === '') {
+      return queueName;
+    }
+    return `${queueName}:${String(value)}`;
+  }
+
+  /**
+   * Read nested values from payload using dot-notation keys
+   */
+  private getNestedValue(payload: any, pathKey: string): any {
+    if (!payload || typeof payload !== 'object') return undefined;
+
+    return pathKey.split('.').reduce((acc: any, part) => {
+      if (acc === undefined || acc === null) return undefined;
+      return acc[part];
+    }, payload);
+  }
+
+  /**
+   * Schedule a queue processing retry when rate limited
+   */
+  private scheduleRateLimitRetry(queueName: string, delayMs: number): void {
+    if (this.rateLimitTimers.has(queueName)) return;
+
+    const timer = setTimeout(() => {
+      this.rateLimitTimers.delete(queueName);
+      this.processQueue(queueName);
+    }, delayMs);
+    this.rateLimitTimers.set(queueName, timer);
   }
 
   /**
@@ -547,6 +622,11 @@ export class QueueService
     // Clear delayed tasks
     const delayedCount = this.delayedTasks.size;
     this.delayedTasks.clear();
+    this.rateLimitState.clear();
+    for (const timer of this.rateLimitTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.rateLimitTimers.clear();
 
     this.logger.log(
       `Cleared all queues. Removed ${totalCleared + delayedCount} tasks`
@@ -577,6 +657,16 @@ export class QueueService
         this.delayedTasks.delete(taskId);
         delayedCount++;
       }
+    }
+    for (const key of this.rateLimitState.keys()) {
+      if (key === queueName || key.startsWith(`${queueName}:`)) {
+        this.rateLimitState.delete(key);
+      }
+    }
+    const timer = this.rateLimitTimers.get(queueName);
+    if (timer) {
+      clearTimeout(timer);
+      this.rateLimitTimers.delete(queueName);
     }
 
     this.logger.log(

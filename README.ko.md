@@ -15,6 +15,7 @@ NestJS Simple Queue는 NestJS 서비스 내부에서 사용할 수 있는 가볍
 - 설정 가능한 동시성 및 안전한 종료 처리
 - 작업 라이프사이클 이벤트 훅 (시작, 성공, 실패, 취소)
 - 선택적 상태 저장(재시작 시 복원)
+- 큐별 처리량 제한 (groupKey 지원)
 
 ---
 
@@ -185,6 +186,7 @@ QueueModule.forRoot({
 - `enablePersistence` (boolean) - 상태 저장/복원 (기본값: false)
 - `persistencePath` (string) - 상태 파일 경로 (기본값: `./queue-state.json`)
 - `processors` (array) - 정적 프로세서 리스트
+- `limiter` (object) - 처리량 제한 설정 (아래 참고)
 - `logger` - 커스텀 로거
 
 ## Enqueue 옵션
@@ -196,6 +198,26 @@ QueueModule.forRoot({
 - `timeoutMs` (number) - 해당 시간 초과 시 실패 처리 (기본값: 비활성)
 - `priority` (TaskPriority) - 우선순위 (기본값: `NORMAL`)
 - `delay` (ms) - 지연 실행 시간 (기본값: 0)
+
+## 처리량 제한 (Rate limiting)
+
+큐 단위 처리량 제한:
+
+```typescript
+QueueModule.forRoot({
+  limiter: { max: 100, duration: 1000 }, // 초당 100개
+});
+```
+
+그룹 기반 제한 (예: 사용자 단위):
+
+```typescript
+QueueModule.forRoot({
+  limiter: { max: 10, duration: 1000, groupKey: 'userId' },
+});
+```
+
+`groupKey`는 점 표기법(`user.id`)도 지원합니다.
 
 ## 운영 참고
 

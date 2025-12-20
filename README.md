@@ -15,6 +15,7 @@ NestJS Simple Queue is a lightweight, in-memory task queue for NestJS services. 
 - Retry backoff and per-task timeouts
 - Configurable concurrency with graceful shutdown handling
 - Event hooks for task lifecycle events (start, success, failure, cancellation)
+- Per-queue rate limiting with optional group keys
 
 ---
 
@@ -194,6 +195,7 @@ QueueModule.forRoot({
 - `enablePersistence` (boolean) - save/restore queue state on shutdown/startup (default: false)
 - `persistencePath` (string) - where to write the state file (default: `./queue-state.json`)
 - `processors` (array) - static processor list if you prefer manual registration
+- `limiter` (object) - rate limit configuration (see below)
 - `logger` - optional custom logger implementation
 
 ## Enqueue options
@@ -205,6 +207,26 @@ QueueModule.forRoot({
 - `timeoutMs` (number) - fail the task if it runs longer than this (default: disabled)
 - `priority` (TaskPriority) - priority ordering (default: `NORMAL`)
 - `delay` (ms) - schedule the task after a delay (default: 0)
+
+## Rate limiting
+
+Limit throughput per queue (BullMQ style):
+
+```typescript
+QueueModule.forRoot({
+  limiter: { max: 100, duration: 1000 }, // 100 jobs per second
+});
+```
+
+Group-based limits (e.g. per user):
+
+```typescript
+QueueModule.forRoot({
+  limiter: { max: 10, duration: 1000, groupKey: 'userId' },
+});
+```
+
+`groupKey` supports dot-notation paths (e.g. `user.id`).
 
 ## Production notes
 

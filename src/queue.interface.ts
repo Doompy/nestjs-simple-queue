@@ -10,6 +10,16 @@ export interface QueueModuleOptions {
   enablePersistence?: boolean; // Enable state persistence
   persistencePath?: string; // State persistence file path
   processors?: QueueProcessor[]; // Job processor registration
+  limiter?: RateLimiterOptions; // Rate limiting configuration
+}
+
+/**
+ * Rate limiter configuration
+ */
+export interface RateLimiterOptions {
+  max: number; // Max tasks allowed within duration
+  duration: number; // Window size in ms
+  groupKey?: string; // Optional payload key for group-based limiting
 }
 
 /**

@@ -496,6 +496,84 @@ describe('QueueService (Job-based)', () => {
     });
   });
 
+  describe('Rate limiting', () => {
+    it('should throttle processing per queue', async () => {
+      const processedAt: number[] = [];
+      const module: TestingModule = await Test.createTestingModule({
+        imports: [
+          QueueModule.forRoot({
+            limiter: { max: 1, duration: 50 },
+            processors: [
+              {
+                name: 'limited-job',
+                process: async () => {
+                  processedAt.push(Date.now());
+                },
+              },
+            ],
+          }),
+        ],
+      }).compile();
+
+      const limitedService = module.get<QueueService>(QueueService);
+
+      await limitedService.enqueue('limited-queue', 'limited-job', {
+        value: 1,
+      });
+      await limitedService.enqueue('limited-queue', 'limited-job', {
+        value: 2,
+      });
+
+      let attempts = 0;
+      while (processedAt.length < 2 && attempts < 200) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        attempts++;
+      }
+
+      expect(processedAt).toHaveLength(2);
+      expect(processedAt[1] - processedAt[0]).toBeGreaterThanOrEqual(40);
+    });
+
+    it('should allow different groups within the same duration window', async () => {
+      const processedAt: Array<{ userId: string; at: number }> = [];
+      const module: TestingModule = await Test.createTestingModule({
+        imports: [
+          QueueModule.forRoot({
+            limiter: { max: 1, duration: 100, groupKey: 'userId' },
+            processors: [
+              {
+                name: 'grouped-job',
+                process: async (payload: { userId: string }) => {
+                  processedAt.push({ userId: payload.userId, at: Date.now() });
+                },
+              },
+            ],
+          }),
+        ],
+      }).compile();
+
+      const limitedService = module.get<QueueService>(QueueService);
+
+      await limitedService.enqueue('grouped-queue', 'grouped-job', {
+        userId: 'user-a',
+      });
+      await limitedService.enqueue('grouped-queue', 'grouped-job', {
+        userId: 'user-b',
+      });
+
+      let attempts = 0;
+      while (processedAt.length < 2 && attempts < 200) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        attempts++;
+      }
+
+      expect(processedAt).toHaveLength(2);
+      const first = processedAt[0];
+      const second = processedAt[1];
+      expect(second.at - first.at).toBeLessThan(80);
+    });
+  });
+
   describe('Delayed Jobs with Job System', () => {
     it('should delay job execution', async () => {
       const payload = {
