@@ -17,8 +17,6 @@ module.exports = {
 
   // Jest 최신 설정
   testTimeout: 30000, // 30초 타임아웃
-  waitForUnhandledRejections: true, // Promise rejection 처리 대기
-
   // 에러 출력 완전 차단
   silent: true,
   verbose: false,

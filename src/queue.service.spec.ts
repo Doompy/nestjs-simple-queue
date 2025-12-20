@@ -1133,20 +1133,26 @@ describe('Task Management', () => {
     });
 
     it('should return delayed status for delayed task', async () => {
-      const taskId = await service.enqueue(
-        'test-queue',
-        'test-job',
-        { data: 'test' },
-        { delay: 1000 }
-      );
+      jest.useFakeTimers();
+      try {
+        const taskId = await service.enqueue(
+          'test-queue',
+          'test-job',
+          { data: 'test' },
+          { delay: 1000 }
+        );
 
-      const status = service.getTaskStatus(taskId);
+        const status = service.getTaskStatus(taskId);
 
-      expect(status.status).toBe('delayed');
-      expect(status.taskId).toBe(taskId);
-      if (status.status === 'delayed') {
-        expect(status.scheduledAt).toBeDefined();
-        expect(status.delay).toBeGreaterThanOrEqual(0);
+        expect(status.status).toBe('delayed');
+        expect(status.taskId).toBe(taskId);
+        if (status.status === 'delayed') {
+          expect(status.scheduledAt).toBeDefined();
+          expect(status.delay).toBeGreaterThanOrEqual(0);
+        }
+      } finally {
+        jest.clearAllTimers();
+        jest.useRealTimers();
       }
     });
 
