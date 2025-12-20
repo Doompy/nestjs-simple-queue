@@ -105,11 +105,6 @@ jobs:
       - name: Install dependencies
         run: npm ci --omit=optional
 
-      - name: Configure npm authentication
-        run: |
-          npm config set //registry.npmjs.org/:_authToken="$NODE_AUTH_TOKEN"
-          npm whoami  
-
       - name: Build project
         run: npm run build
 
@@ -120,8 +115,6 @@ jobs:
 
       - name: Publish to npm
         run: npm publish --provenance
-        env:
-          NODE_AUTH_TOKEN: ""
 
   release:
     runs-on: ubuntu-latest
