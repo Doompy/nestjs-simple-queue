@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [18.x, 20.x, 22.x, 24.x]
+        node-version: [20.x, 22.x, 24.x]
     env:
       NPM_CONFIG_OMIT: optional
 
@@ -88,37 +88,22 @@ jobs:
       id-token: write
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Use Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '24.x'
           cache: 'npm'
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Use npm 10
-        run: npm i -g npm@10
+      - name: Use npm (OIDC compatible)
+        run: npm i -g npm@^11.5.1
 
-      - name: Install dependencies
-        run: npm ci --omit=optional
-
-      - name: Build project
-        run: npm run build
-
-      - name: Who am I (OIDC ping)
-        run: npm ping
-
-      - name: Prepare npmrc for OIDC
-        run: |
-          rm -f "$NPM_CONFIG_USERCONFIG"
-          echo "registry=https://registry.npmjs.org/" > "$NPM_CONFIG_USERCONFIG"
+      - run: npm ci --omit=optional
+      - run: npm run build
 
       - name: Publish to npm
-        run: |
-          unset NODE_AUTH_TOKEN NPM_TOKEN
-          npm publish --provenance --access public
+        run: npm publish --provenance --access public
 
   release:
     runs-on: ubuntu-latest
