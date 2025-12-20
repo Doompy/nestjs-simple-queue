@@ -1,4 +1,4 @@
-# NestJS Simple Queue
+﻿# NestJS Simple Queue
 
 [![npm version](https://badge.fury.io/js/nestjs-simple-queue.svg)](https://badge.fury.io/js/nestjs-simple-queue)
 [![npm downloads](https://img.shields.io/npm/dm/nestjs-simple-queue.svg)](https://www.npmjs.com/package/nestjs-simple-queue)
@@ -12,6 +12,7 @@ NestJS Simple Queue is a lightweight, in-memory task queue for NestJS services. 
 - Declarative processor registration with `@QueueJob`
 - Optional persistence to survive restarts
 - Delayed jobs, cancellation, and priority ordering
+- Retry backoff and per-task timeouts
 - Configurable concurrency with graceful shutdown handling
 - Event hooks for task lifecycle events (start, success, failure, cancellation)
 
@@ -132,6 +133,19 @@ export class TaskService {
       { delay: 60 * 60 * 1000 }
     );
   }
+
+  async sendWithBackoff(email: string) {
+    return this.queueService.enqueue(
+      'email-queue',
+      'send-welcome-email',
+      { email, name: 'Backoff User' },
+      {
+        retries: 3,
+        backoff: { type: 'exponential', delay: 500, maxDelay: 10_000 },
+        timeoutMs: 5_000,
+      }
+    );
+  }
 }
 ```
 
@@ -175,12 +189,22 @@ QueueModule.forRoot({
 
 `QueueModule.forRoot` accepts these common options:
 
-- `concurrency` (number) – concurrent tasks per queue (default: 1)
-- `gracefulShutdownTimeout` (ms) – how long to wait before forcing shutdown (default: 30_000)
-- `enablePersistence` (boolean) – save/restore queue state on shutdown/startup (default: false)
-- `persistencePath` (string) – where to write the state file (default: `./queue-state.json`)
-- `processors` (array) – static processor list if you prefer manual registration
-- `logger` – optional custom logger implementation
+- `concurrency` (number) - concurrent tasks per queue (default: 1)
+- `gracefulShutdownTimeout` (ms) - how long to wait before forcing shutdown (default: 30_000)
+- `enablePersistence` (boolean) - save/restore queue state on shutdown/startup (default: false)
+- `persistencePath` (string) - where to write the state file (default: `./queue-state.json`)
+- `processors` (array) - static processor list if you prefer manual registration
+- `logger` - optional custom logger implementation
+
+## Enqueue options
+
+`queueService.enqueue` accepts these per-task options:
+
+- `retries` (number) - number of retry attempts (default: 0)
+- `backoff` (object) - retry backoff config: `{ type: 'fixed' | 'exponential', delay, maxDelay? }`
+- `timeoutMs` (number) - fail the task if it runs longer than this (default: disabled)
+- `priority` (TaskPriority) - priority ordering (default: `NORMAL`)
+- `delay` (ms) - schedule the task after a delay (default: 0)
 
 ## Production notes
 

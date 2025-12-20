@@ -1,4 +1,4 @@
-import {
+﻿import {
   Injectable,
   Inject,
   Logger,
@@ -16,6 +16,7 @@ import {
   DelayedTaskInfo,
   ProcessorManagement,
   TaskStatus,
+  EnqueueOptions,
 } from './queue.interface';
 
 @Injectable()
@@ -76,11 +77,7 @@ export class QueueService
     queueName: string,
     jobName: string,
     payload: T,
-    options?: {
-      retries?: number;
-      priority?: TaskPriority;
-      delay?: number; // 지연 시간 (ms)
-    }
+    options?: EnqueueOptions
   ): Promise<string> {
     // taskId를 반환하도록 변경
     if (this.isShuttingDown) {
@@ -104,10 +101,15 @@ export class QueueService
       taskResolve = resolve;
       taskReject = reject;
     });
+    taskPromise.catch(() => {
+      // Prevent unhandled rejection warnings; task failures are handled via events/logging.
+    });
 
     const retries = options?.retries || 0;
     const priority = options?.priority || TaskPriority.NORMAL;
     const delay = options?.delay || 0;
+    const backoff = options?.backoff;
+    const timeoutMs = options?.timeoutMs;
 
     const taskId = this.generateTaskId();
     const createdAt = new Date();
@@ -129,7 +131,11 @@ export class QueueService
       resolve: taskResolve!,
       reject: taskReject!,
       retries,
+      maxRetries: retries,
+      attemptsMade: 0,
       priority,
+      backoff,
+      timeoutMs,
       promise: taskPromise,
       createdAt,
       delay,
@@ -280,6 +286,7 @@ export class QueueService
     this.currentTasks.set(queueName, runningTasks);
 
     try {
+      task.attemptsMade = (task.attemptsMade || 0) + 1;
       this.eventEmitter.emit('queue.task.processing', { queueName, task });
 
       // Find processor by jobName
@@ -288,7 +295,7 @@ export class QueueService
         throw new Error(`Processor not found for job: ${task.jobName}`);
       }
 
-      await processor(task.payload);
+      await this.executeWithTimeout(task, processor);
       task.resolve();
       this.eventEmitter.emit('queue.task.success', { queueName, task });
     } catch (error) {
@@ -302,7 +309,19 @@ export class QueueService
 
       if (task.retries > 0) {
         task.retries--;
-        this.queues.get(queueName)?.unshift(task); // Only unshift if queue exists
+        const backoffDelay = this.calculateBackoffDelay(task);
+        if (backoffDelay && backoffDelay > 0) {
+          task.delay = backoffDelay;
+          task.scheduledAt = new Date(Date.now() + backoffDelay);
+          task.queueName = queueName;
+          this.delayedTasks.set(task.id, task);
+          this.eventEmitter.emit('queue.task.delayed', { queueName, task });
+          setTimeout(() => {
+            this.addDelayedTaskToQueue(queueName, task);
+          }, backoffDelay);
+        } else {
+          this.queues.get(queueName)?.unshift(task); // Only unshift if queue exists
+        }
       } else {
         try {
           task.reject(error);
@@ -332,6 +351,56 @@ export class QueueService
         this.eventEmitter.emit('queue.empty', { queueName });
       }
     }
+  }
+
+  /**
+   * Execute task with optional timeout
+   */
+  private async executeWithTimeout(
+    task: Task<any>,
+    processor: (payload: any) => Promise<void>
+  ): Promise<void> {
+    if (!task.timeoutMs || task.timeoutMs <= 0) {
+      await processor(task.payload);
+      return;
+    }
+
+    let timeoutId: NodeJS.Timeout | undefined;
+    const timeoutPromise = new Promise<void>((_, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(new Error(`Task timed out after ${task.timeoutMs}ms`));
+      }, task.timeoutMs);
+    });
+
+    try {
+      await Promise.race([processor(task.payload), timeoutPromise]);
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    }
+  }
+
+  /**
+   * Calculate backoff delay for a retry
+   */
+  private calculateBackoffDelay(task: Task<any>): number | null {
+    const backoff = task.backoff;
+    if (!backoff || !backoff.delay || backoff.delay <= 0) {
+      return null;
+    }
+
+    const attempt = Math.max(1, task.attemptsMade || 1);
+    const baseDelay =
+      backoff.type === 'exponential'
+        ? backoff.delay * Math.pow(2, attempt - 1)
+        : backoff.delay;
+
+    if (backoff.maxDelay && backoff.maxDelay > 0) {
+      return Math.min(baseDelay, backoff.maxDelay);
+    }
+
+    return baseDelay;
   }
 
   /**
@@ -708,9 +777,26 @@ export class QueueService
         taskResolve = resolve;
         taskReject = reject;
       });
+      taskPromise.catch(() => {
+        // Prevent unhandled rejection warnings; task failures are handled via events/logging.
+      });
 
       return {
         ...serializedTask,
+        retries:
+          typeof serializedTask.retries === 'number'
+            ? serializedTask.retries
+            : 0,
+        maxRetries:
+          typeof serializedTask.maxRetries === 'number'
+            ? serializedTask.maxRetries
+            : typeof serializedTask.retries === 'number'
+              ? serializedTask.retries
+              : 0,
+        attemptsMade:
+          typeof serializedTask.attemptsMade === 'number'
+            ? serializedTask.attemptsMade
+            : 0,
         resolve: taskResolve!,
         reject: taskReject!,
         promise: taskPromise,
@@ -872,3 +958,5 @@ export class QueueService
     this.logger.log('Queue service shutdown completed.');
   }
 }
+
+

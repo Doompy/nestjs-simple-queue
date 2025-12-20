@@ -31,6 +31,20 @@ export enum TaskPriority {
 }
 
 /**
+ * Backoff strategy types
+ */
+export type BackoffType = 'fixed' | 'exponential';
+
+/**
+ * Backoff configuration
+ */
+export interface BackoffOptions {
+  type?: BackoffType;
+  delay: number; // Base delay in ms
+  maxDelay?: number; // Optional max delay cap in ms
+}
+
+/**
  * Interface for managing tasks within the queue
  */
 export interface Task<T> {
@@ -40,7 +54,11 @@ export interface Task<T> {
   resolve: () => void;
   reject: (reason?: any) => void;
   retries: number;
+  maxRetries: number;
+  attemptsMade: number;
   priority: TaskPriority;
+  backoff?: BackoffOptions;
+  timeoutMs?: number;
   promise: Promise<void>; // Promise for tracking task completion
   createdAt: Date; // Task creation time
   delay?: number; // Delay time (ms)
@@ -100,6 +118,8 @@ export interface EnqueueOptions {
   retries?: number;
   priority?: TaskPriority;
   delay?: number;
+  backoff?: BackoffOptions;
+  timeoutMs?: number;
 }
 
 /**

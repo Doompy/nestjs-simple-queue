@@ -576,6 +576,66 @@ describe('QueueService (Job-based)', () => {
     });
   });
 
+  describe('Retry Backoff and Timeout', () => {
+    it('should apply backoff delay between retries', async () => {
+      const attemptTimes: number[] = [];
+      let callCount = 0;
+
+      service.registerProcessor('flaky-job', async () => {
+        attemptTimes.push(Date.now());
+        callCount++;
+        if (callCount === 1) {
+          throw new Error('Fail once');
+        }
+      });
+
+      await service.enqueue(
+        'backoff-queue',
+        'flaky-job',
+        { data: 'backoff' },
+        { retries: 1, backoff: { type: 'fixed', delay: 50 } }
+      );
+
+      let attempts = 0;
+      while (attemptTimes.length < 2 && attempts < 100) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        attempts++;
+      }
+
+      expect(attemptTimes).toHaveLength(2);
+      expect(attemptTimes[1] - attemptTimes[0]).toBeGreaterThanOrEqual(40);
+    });
+
+    it('should fail a task when timeout is exceeded', async () => {
+      (eventEmitter.emit as jest.Mock).mockClear();
+
+      service.registerProcessor('timeout-job', async () => {
+        await new Promise((resolve) => setTimeout(resolve, 30));
+      });
+
+      await service.enqueue(
+        'timeout-queue',
+        'timeout-job',
+        { data: 'timeout' },
+        { timeoutMs: 10 }
+      );
+
+      let attempts = 0;
+      let failedCall: any;
+      while (!failedCall && attempts < 100) {
+        failedCall = (eventEmitter.emit as jest.Mock).mock.calls.find(
+          (call) => call[0] === 'queue.task.failed'
+        );
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        attempts++;
+      }
+
+      expect(failedCall).toBeDefined();
+      expect(failedCall[1].error).toBeInstanceOf(Error);
+      expect(failedCall[1].error.message).toMatch(/timed out/i);
+    });
+  });
+
   describe('Job Cancellation', () => {
     // 작업 취소 기능은 작동하지만 테스트 환경에서 불안정하므로 주석 처리
     // it('should cancel pending delayed job', async () => { ... });
