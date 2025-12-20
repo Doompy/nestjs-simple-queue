@@ -958,5 +958,3 @@ export class QueueService
     this.logger.log('Queue service shutdown completed.');
   }
 }
-
-
