@@ -1,6 +1,6 @@
 {
   "name": "nestjs-simple-queue",
-  "version": "3.0.11",
+  "version": "3.0.12",
   "description": "A simple, generic, in-memory task queue service for NestJS",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
