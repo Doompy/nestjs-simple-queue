@@ -104,8 +104,13 @@ jobs:
       - name: Build project
         run: npm run build
 
+      - name: Clear npm auth token
+        run: npm config delete //registry.npmjs.org/:_authToken
+
       - name: Publish to npm
         run: npm publish --provenance
+        env:
+          NODE_AUTH_TOKEN: ""
 
   release:
     runs-on: ubuntu-latest
