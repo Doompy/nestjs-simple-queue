@@ -16,6 +16,7 @@ NestJS Simple Queue is a lightweight, in-memory task queue for NestJS services. 
 - Configurable concurrency with graceful shutdown handling
 - Event hooks for task lifecycle events (start, success, failure, cancellation)
 - Per-queue rate limiting with optional group keys
+- Dead letter queue (DLQ) for failed tasks
 
 ---
 
@@ -196,6 +197,7 @@ QueueModule.forRoot({
 - `persistencePath` (string) - where to write the state file (default: `./queue-state.json`)
 - `processors` (array) - static processor list if you prefer manual registration
 - `limiter` (object) - rate limit configuration (see below)
+- `deadLetter` (object) - dead letter queue configuration (see below)
 - `logger` - optional custom logger implementation
 
 ## Enqueue options
@@ -227,6 +229,41 @@ QueueModule.forRoot({
 ```
 
 `groupKey` supports dot-notation paths (e.g. `user.id`).
+
+## Dead letter queue (DLQ)
+
+Move failed tasks to a separate queue after retries are exhausted:
+
+```typescript
+QueueModule.forRoot({
+  deadLetter: { queueName: 'dlq' },
+});
+```
+
+By default, the DLQ job name becomes `<jobName>:deadletter`. Register a
+processor for that name:
+
+```typescript
+QueueModule.forRoot({
+  deadLetter: { queueName: 'dlq' },
+  processors: [
+    {
+      name: 'send-email:deadletter',
+      process: async (payload) => {
+        console.log(payload.originalPayload, payload.error);
+      },
+    },
+  ],
+});
+```
+
+If you prefer a custom DLQ job name:
+
+```typescript
+QueueModule.forRoot({
+  deadLetter: { queueName: 'dlq', jobName: 'dlq-handler' },
+});
+```
 
 ## Production notes
 

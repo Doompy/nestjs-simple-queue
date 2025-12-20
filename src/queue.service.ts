@@ -18,6 +18,7 @@ import {
   TaskStatus,
   EnqueueOptions,
   RateLimiterOptions,
+  DeadLetterOptions,
 } from './queue.interface';
 
 @Injectable()
@@ -34,6 +35,7 @@ export class QueueService
   private readonly enablePersistence: boolean;
   private readonly persistencePath: string;
   private readonly limiter?: RateLimiterOptions;
+  private readonly deadLetter?: DeadLetterOptions;
   private isShuttingDown = false;
   private processors = new Map<string, (payload: any) => Promise<void>>(); // Job processor map
   private rateLimitState = new Map<string, number[]>();
@@ -63,6 +65,7 @@ export class QueueService
     this.enablePersistence = options.enablePersistence || false;
     this.persistencePath = options.persistencePath || './queue-state.json';
     this.limiter = options.limiter;
+    this.deadLetter = options.deadLetter;
 
     // Register job processors
     if (options.processors) {
@@ -334,6 +337,7 @@ export class QueueService
           this.queues.get(queueName)?.unshift(task); // Only unshift if queue exists
         }
       } else {
+        this.moveToDeadLetter(queueName, task, error);
         try {
           task.reject(error);
         } catch {
@@ -426,6 +430,73 @@ export class QueueService
       this.processQueue(queueName);
     }, delayMs);
     this.rateLimitTimers.set(queueName, timer);
+  }
+
+  /**
+   * Move a failed task to the dead letter queue
+   */
+  private moveToDeadLetter(
+    queueName: string,
+    task: Task<any>,
+    error: unknown
+  ): void {
+    if (!this.deadLetter) return;
+    if (task.deadLettered) return;
+    if (queueName === this.deadLetter.queueName) return;
+
+    const dlqJobName = this.deadLetter.jobName || `${task.jobName}:deadletter`;
+    if (!this.processors.has(dlqJobName)) {
+      this.logger.warn(
+        `DLQ processor '${dlqJobName}' not registered. Skipping dead letter move.`
+      );
+      return;
+    }
+
+    const errorMessage =
+      error instanceof Error ? error.message : 'An unknown error occurred';
+    let taskResolve: () => void;
+    let taskReject: (reason?: any) => void;
+
+    const taskPromise = new Promise<void>((resolve, reject) => {
+      taskResolve = resolve;
+      taskReject = reject;
+    });
+    taskPromise.catch(() => {
+      // Prevent unhandled rejection warnings; task failures are handled via events/logging.
+    });
+
+    const dlqTask: Task<any> = {
+      id: this.generateTaskId(),
+      payload: {
+        originalPayload: task.payload,
+        error: errorMessage,
+        fromQueue: queueName,
+        jobName: task.jobName,
+        taskId: task.id,
+      },
+      jobName: dlqJobName,
+      resolve: taskResolve!,
+      reject: taskReject!,
+      retries: 0,
+      maxRetries: 0,
+      attemptsMade: 0,
+      priority: task.priority,
+      promise: taskPromise,
+      createdAt: new Date(),
+      queueName: this.deadLetter.queueName,
+    };
+
+    dlqTask.deadLettered = true;
+
+    this.ensureQueueInitialized(this.deadLetter.queueName);
+    const dlqQueue = this.queues.get(this.deadLetter.queueName)!;
+    dlqQueue.push(dlqTask);
+    this.eventEmitter.emit('queue.task.deadlettered', {
+      queueName: this.deadLetter.queueName,
+      task: dlqTask,
+      fromQueue: queueName,
+    });
+    this.processQueue(this.deadLetter.queueName);
   }
 
   /**

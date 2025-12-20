@@ -714,6 +714,57 @@ describe('QueueService (Job-based)', () => {
     });
   });
 
+  describe('Dead letter queue', () => {
+    it('should move failed tasks to the dead letter queue', async () => {
+      const dlqProcessed: any[] = [];
+      const module: TestingModule = await Test.createTestingModule({
+        imports: [
+          QueueModule.forRoot({
+            deadLetter: { queueName: 'dlq' },
+            processors: [
+              {
+                name: 'always-fail',
+                process: async () => {
+                  throw new Error('fail');
+                },
+              },
+              {
+                name: 'always-fail:deadletter',
+                process: async (payload: any) => {
+                  dlqProcessed.push(payload);
+                },
+              },
+            ],
+          }),
+        ],
+      }).compile();
+
+      const dlqService = module.get<QueueService>(QueueService);
+      const dlqEventEmitter = module.get<EventEmitter2>(EventEmitter2);
+      const emitSpy = jest.spyOn(dlqEventEmitter, 'emit');
+
+      const payload = { id: 'job-1' };
+      await dlqService.enqueue('primary', 'always-fail', payload);
+
+      let attempts = 0;
+      while (dlqProcessed.length === 0 && attempts < 100) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        attempts++;
+      }
+
+      expect(dlqProcessed).toHaveLength(1);
+      expect(dlqProcessed[0].originalPayload).toEqual(payload);
+      expect(dlqProcessed[0].fromQueue).toBe('primary');
+      expect(emitSpy).toHaveBeenCalledWith(
+        'queue.task.deadlettered',
+        expect.objectContaining({
+          queueName: 'dlq',
+          fromQueue: 'primary',
+        })
+      );
+    });
+  });
+
   describe('Job Cancellation', () => {
     // NOTE: comment removed (non-ASCII).
     // it('should cancel pending delayed job', async () => { ... });

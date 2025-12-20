@@ -16,6 +16,7 @@ NestJS Simple Queue는 NestJS 서비스 내부에서 사용할 수 있는 가볍
 - 작업 라이프사이클 이벤트 훅 (시작, 성공, 실패, 취소)
 - 선택적 상태 저장(재시작 시 복원)
 - 큐별 처리량 제한 (groupKey 지원)
+- DLQ(실패 작업 보관 큐) 지원
 
 ---
 
@@ -187,6 +188,7 @@ QueueModule.forRoot({
 - `persistencePath` (string) - 상태 파일 경로 (기본값: `./queue-state.json`)
 - `processors` (array) - 정적 프로세서 리스트
 - `limiter` (object) - 처리량 제한 설정 (아래 참고)
+- `deadLetter` (object) - DLQ 설정 (아래 참고)
 - `logger` - 커스텀 로거
 
 ## Enqueue 옵션
@@ -218,6 +220,40 @@ QueueModule.forRoot({
 ```
 
 `groupKey`는 점 표기법(`user.id`)도 지원합니다.
+
+## DLQ (Dead Letter Queue)
+
+재시도 소진 후 실패한 작업을 별도 큐로 이동합니다:
+
+```typescript
+QueueModule.forRoot({
+  deadLetter: { queueName: 'dlq' },
+});
+```
+
+기본 DLQ 작업 이름은 `<jobName>:deadletter`이며 해당 이름의 프로세서를 등록하세요:
+
+```typescript
+QueueModule.forRoot({
+  deadLetter: { queueName: 'dlq' },
+  processors: [
+    {
+      name: 'send-email:deadletter',
+      process: async (payload) => {
+        console.log(payload.originalPayload, payload.error);
+      },
+    },
+  ],
+});
+```
+
+원하면 DLQ job 이름을 지정할 수 있습니다:
+
+```typescript
+QueueModule.forRoot({
+  deadLetter: { queueName: 'dlq', jobName: 'dlq-handler' },
+});
+```
 
 ## 운영 참고
 

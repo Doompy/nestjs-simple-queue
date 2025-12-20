@@ -11,6 +11,7 @@ export interface QueueModuleOptions {
   persistencePath?: string; // State persistence file path
   processors?: QueueProcessor[]; // Job processor registration
   limiter?: RateLimiterOptions; // Rate limiting configuration
+  deadLetter?: DeadLetterOptions; // Dead letter queue configuration
 }
 
 /**
@@ -20,6 +21,14 @@ export interface RateLimiterOptions {
   max: number; // Max tasks allowed within duration
   duration: number; // Window size in ms
   groupKey?: string; // Optional payload key for group-based limiting
+}
+
+/**
+ * Dead letter queue configuration
+ */
+export interface DeadLetterOptions {
+  queueName: string; // DLQ queue name
+  jobName?: string; // Optional DLQ job name override
 }
 
 /**
@@ -74,6 +83,7 @@ export interface Task<T> {
   delay?: number; // Delay time (ms)
   scheduledAt?: Date; // Scheduled execution time
   queueName?: string; // Queue name (for delayed tasks)
+  deadLettered?: boolean; // Task moved to dead letter queue
 }
 
 /**
