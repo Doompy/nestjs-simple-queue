@@ -97,12 +97,18 @@ jobs:
           node-version: '24.x'
           cache: 'npm'
           registry-url: 'https://registry.npmjs.org'
+          always-auth: true
 
       - name: Use npm 10
         run: npm i -g npm@10
 
       - name: Install dependencies
         run: npm ci --omit=optional
+
+      - name: Configure npm authentication
+        run: |
+          npm config set //registry.npmjs.org/:_authToken="$NODE_AUTH_TOKEN"
+          npm whoami  
 
       - name: Build project
         run: npm run build
