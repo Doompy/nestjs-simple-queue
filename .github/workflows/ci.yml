@@ -83,6 +83,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     env:
       NPM_CONFIG_OMIT: optional
+      NODE_AUTH_TOKEN: ""
     permissions:
       contents: read
       id-token: write
@@ -97,6 +98,7 @@ jobs:
           node-version: '24.x'
           cache: 'npm'
           registry-url: 'https://registry.npmjs.org'
+          token: ""
 
       - name: Use npm 10
         run: npm i -g npm@10
@@ -106,6 +108,9 @@ jobs:
 
       - name: Build project
         run: npm run build
+
+      - name: Who am I (OIDC ping)
+        run: npm ping
 
       - name: Publish to npm
         run: npm publish --provenance --access public
