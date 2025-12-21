@@ -1,11 +1,14 @@
 {
   "name": "nestjs-simple-queue",
-  "version": "3.2.1",
+  "version": "3.2.2",
   "description": "A predictable, in-process job queue for NestJS — no Redis, no workers, no surprises.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "README.ko.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "rimraf dist && tsc",
@@ -21,18 +24,17 @@
   "keywords": [
     "nestjs",
     "nest",
+    "nestjs queue",
     "queue",
     "job queue",
     "background jobs",
     "task queue",
     "in-memory queue",
-    "simple queue",
     "bull",
     "bullmq",
     "redis alternative",
-    "worker",
-    "scheduler",
-    "async jobs"
+    "rate limiting",
+    "dedupe"
   ],
   "author": "doompy17",
   "license": "MIT",
@@ -78,5 +80,12 @@
   "publishConfig": {
     "registry": "https://registry.npmjs.org/"
   },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "sideEffects": false,
   "packageManager": "pnpm@9.15.4+sha512.b2dc20e2fc72b3e18848459b37359a32064663e5627a51e4c74b2c29dd8e8e0491483c3abb40789cfd578bf362fb6ba8261b05f0387d76792ed6e23ea3b1b6a0"
 }
