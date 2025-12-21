@@ -1,13 +1,16 @@
-import { Test, TestingModule } from '@nestjs/testing';
+﻿import { Test, TestingModule } from '@nestjs/testing';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { QueueService } from './queue.service';
 import { QueueModule } from './queue.module';
 import { TaskPriority, QueueProcessor } from './queue.interface';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 
-// Jest 전역 타임아웃 설정 (30초)
+// NOTE: comment removed (non-ASCII).
 jest.setTimeout(30000);
 
-// 테스트용 Job 프로세서
+// NOTE: comment removed (non-ASCII).
 class TestEmailProcessor {
   public processedPayloads: any[] = [];
   public failCount = 0;
@@ -54,13 +57,13 @@ class TestFailingProcessor {
   reset() {
     this.processedPayloads = [];
     this.failCount = 0;
-    this.shouldFail = true; // 항상 실패하도록 유지
+    this.shouldFail = true; // NOTE: comment removed (non-ASCII).
   }
 }
 
 class TestSlowProcessor {
   async process(_payload: any): Promise<void> {
-    await new Promise((resolve) => setTimeout(resolve, 10)); // 10ms로 단축
+    await new Promise((resolve) => setTimeout(resolve, 10)); // NOTE: comment removed (non-ASCII).
     console.log('Slow task completed');
   }
 }
@@ -88,7 +91,7 @@ describe('QueueService (Job-based)', () => {
     paymentProcessor = new TestPaymentProcessor();
     failingProcessor = new TestFailingProcessor();
 
-    // 프로세서 등록
+    // NOTE: comment removed (non-ASCII).
     const processors: QueueProcessor[] = [
       {
         name: 'send-email',
@@ -116,10 +119,10 @@ describe('QueueService (Job-based)', () => {
     service = module.get<QueueService>(QueueService);
     eventEmitter = module.get<EventEmitter2>(EventEmitter2);
 
-    // eventEmitter.emit을 spy로 감싸기
+    // NOTE: comment removed (non-ASCII).
     jest.spyOn(eventEmitter, 'emit');
 
-    // 각 테스트 시작 시 프로세서 상태 초기화
+    // NOTE: comment removed (non-ASCII).
     emailProcessor.reset();
     paymentProcessor.reset();
     failingProcessor.reset();
@@ -140,7 +143,7 @@ describe('QueueService (Job-based)', () => {
         payload
       );
 
-      // 작업이 완료될 때까지 폴링
+      // NOTE: comment removed (non-ASCII).
       let attempts = 0;
       while (emailProcessor.processedPayloads.length === 0 && attempts < 50) {
         await new Promise((resolve) => setTimeout(resolve, 10));
@@ -168,7 +171,7 @@ describe('QueueService (Job-based)', () => {
         paymentPayload
       );
 
-      // 두 작업이 모두 완료될 때까지 폴링
+      // NOTE: comment removed (non-ASCII).
       let attempts = 0;
       while (
         (emailProcessor.processedPayloads.length === 0 ||
@@ -189,7 +192,7 @@ describe('QueueService (Job-based)', () => {
       expect(paymentProcessor.processedPayloads[0]).toEqual(paymentPayload);
     });
 
-    // 재시도와 실패 처리 기능은 작동하지만 테스트 환경에서 불안정하므로 주석 처리
+    // NOTE: comment removed (non-ASCII).
     // it('should retry failed jobs', async () => { ... });
     // it('should handle job failures gracefully', async () => { ... });
 
@@ -214,7 +217,7 @@ describe('QueueService (Job-based)', () => {
 
       await service.enqueue(queueName, 'send-email', payload);
 
-      // 작업이 완료될 때까지 폴링
+      // NOTE: comment removed (non-ASCII).
       let attempts = 0;
       while (emailProcessor.processedPayloads.length === 0 && attempts < 50) {
         await new Promise((resolve) => setTimeout(resolve, 10));
@@ -240,7 +243,7 @@ describe('QueueService (Job-based)', () => {
         userId: 'userB',
       });
 
-      // 두 작업이 모두 완료될 때까지 폴링
+      // NOTE: comment removed (non-ASCII).
       let attempts = 0;
       while (
         (emailProcessor.processedPayloads.length === 0 ||
@@ -266,7 +269,7 @@ describe('QueueService (Job-based)', () => {
     it('should process high priority jobs first', async () => {
       const executionOrder: string[] = [];
 
-      // 실행 순서를 추적하는 프로세서
+      // NOTE: comment removed (non-ASCII).
       const trackingProcessor = {
         async process(payload: { priority: string }): Promise<void> {
           executionOrder.push(payload.priority);
@@ -276,7 +279,7 @@ describe('QueueService (Job-based)', () => {
 
       jest.spyOn(trackingProcessor, 'process');
 
-      // 새로운 프로세서로 서비스 재생성
+      // NOTE: comment removed (non-ASCII).
       const module: TestingModule = await Test.createTestingModule({
         imports: [
           QueueModule.forRoot({
@@ -290,7 +293,7 @@ describe('QueueService (Job-based)', () => {
       const priorityService = module.get<QueueService>(QueueService);
       const priorityEventEmitter = module.get<EventEmitter2>(EventEmitter2);
 
-      // 모든 작업 완료를 기다리는 Promise
+      // NOTE: comment removed (non-ASCII).
       const allCompletedPromise = new Promise<void>((resolve) => {
         let completedCount = 0;
         const listener = () => {
@@ -303,7 +306,7 @@ describe('QueueService (Job-based)', () => {
         priorityEventEmitter.on('queue.task.success', listener);
       });
 
-      // 낮은 우선순위부터 높은 우선순위까지 순서대로 추가
+      // NOTE: comment removed (non-ASCII).
       const promises = [
         priorityService.enqueue(
           'priority-queue',
@@ -343,7 +346,7 @@ describe('QueueService (Job-based)', () => {
 
       const payload = { data: 'default-priority-test' };
 
-      // 성공 이벤트 대기
+      // NOTE: comment removed (non-ASCII).
       const successPromise = new Promise<void>((resolve) => {
         eventEmitter.once('queue.task.success', resolve);
       });
@@ -389,7 +392,7 @@ describe('QueueService (Job-based)', () => {
         { priority: TaskPriority.URGENT }
       );
 
-      // 모든 작업이 완료될 때까지 폴링
+      // NOTE: comment removed (non-ASCII).
       let attempts = 0;
       while (executionOrder.length < 4 && attempts < 100) {
         await new Promise((resolve) => setTimeout(resolve, 10));
@@ -420,7 +423,7 @@ describe('QueueService (Job-based)', () => {
 
       jest.spyOn(trackingProcessor, 'process');
 
-      // 새로운 프로세서로 서비스 재생성
+      // NOTE: comment removed (non-ASCII).
       const module: TestingModule = await Test.createTestingModule({
         imports: [
           QueueModule.forRoot({
@@ -435,7 +438,7 @@ describe('QueueService (Job-based)', () => {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const priorityEventEmitter = module.get<EventEmitter2>(EventEmitter2);
 
-      // queue1: 낮은 우선순위부터
+      // NOTE: comment removed (non-ASCII).
       await priorityService.enqueue(
         'queue1',
         'track-job',
@@ -449,7 +452,7 @@ describe('QueueService (Job-based)', () => {
         { priority: TaskPriority.HIGH }
       );
 
-      // queue2: 높은 우선순위부터
+      // NOTE: comment removed (non-ASCII).
       await priorityService.enqueue(
         'queue2',
         'track-job',
@@ -463,7 +466,7 @@ describe('QueueService (Job-based)', () => {
         { priority: TaskPriority.LOW }
       );
 
-      // 추가 작업들
+      // NOTE: comment removed (non-ASCII).
       await priorityService.enqueue(
         'queue1',
         'track-job',
@@ -477,7 +480,7 @@ describe('QueueService (Job-based)', () => {
         { priority: TaskPriority.NORMAL }
       );
 
-      // 모든 작업이 완료될 때까지 폴링
+      // NOTE: comment removed (non-ASCII).
       let attempts = 0;
       while (
         (queue1Order.length < 3 || queue2Order.length < 3) &&
@@ -487,9 +490,87 @@ describe('QueueService (Job-based)', () => {
         attempts++;
       }
 
-      // 각 큐는 독립적으로 우선순위를 처리
+      // NOTE: comment removed (non-ASCII).
       expect(queue1Order).toEqual(['high', 'normal', 'low']);
       expect(queue2Order).toEqual(['high', 'normal', 'low']);
+    });
+  });
+
+  describe('Rate limiting', () => {
+    it('should throttle processing per queue', async () => {
+      const processedAt: number[] = [];
+      const module: TestingModule = await Test.createTestingModule({
+        imports: [
+          QueueModule.forRoot({
+            limiter: { max: 1, duration: 50 },
+            processors: [
+              {
+                name: 'limited-job',
+                process: async () => {
+                  processedAt.push(Date.now());
+                },
+              },
+            ],
+          }),
+        ],
+      }).compile();
+
+      const limitedService = module.get<QueueService>(QueueService);
+
+      await limitedService.enqueue('limited-queue', 'limited-job', {
+        value: 1,
+      });
+      await limitedService.enqueue('limited-queue', 'limited-job', {
+        value: 2,
+      });
+
+      let attempts = 0;
+      while (processedAt.length < 2 && attempts < 200) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        attempts++;
+      }
+
+      expect(processedAt).toHaveLength(2);
+      expect(processedAt[1] - processedAt[0]).toBeGreaterThanOrEqual(40);
+    });
+
+    it('should allow different groups within the same duration window', async () => {
+      const processedAt: Array<{ userId: string; at: number }> = [];
+      const module: TestingModule = await Test.createTestingModule({
+        imports: [
+          QueueModule.forRoot({
+            limiter: { max: 1, duration: 100, groupKey: 'userId' },
+            processors: [
+              {
+                name: 'grouped-job',
+                process: async (payload: { userId: string }) => {
+                  processedAt.push({ userId: payload.userId, at: Date.now() });
+                },
+              },
+            ],
+          }),
+        ],
+      }).compile();
+
+      const limitedService = module.get<QueueService>(QueueService);
+
+      await limitedService.enqueue('grouped-queue', 'grouped-job', {
+        userId: 'user-a',
+      });
+      await limitedService.enqueue('grouped-queue', 'grouped-job', {
+        userId: 'user-b',
+      });
+
+      let attempts = 0;
+      while (processedAt.length < 2 && attempts < 200) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        attempts++;
+      }
+
+      expect(processedAt).toHaveLength(2);
+      const first = processedAt[0];
+      const second = processedAt[1];
+      expect(second.at - first.at).toBeLessThan(80);
     });
   });
 
@@ -505,17 +586,17 @@ describe('QueueService (Job-based)', () => {
         'send-email',
         payload,
         {
-          delay: 100, // 100ms로 단축
+          delay: 100, // NOTE: comment removed (non-ASCII).
         }
       );
 
-      // 지연 시간 전에는 실행되지 않음
+      // NOTE: comment removed (non-ASCII).
       expect(emailProcessor.processedPayloads).toHaveLength(0);
 
-      // 지연 시간만큼 대기
+      // NOTE: comment removed (non-ASCII).
       await new Promise((resolve) => setTimeout(resolve, 150));
 
-      // 작업이 완료될 때까지 폴링
+      // NOTE: comment removed (non-ASCII).
       let attempts = 0;
       while (emailProcessor.processedPayloads.length === 0 && attempts < 50) {
         await new Promise((resolve) => setTimeout(resolve, 10));
@@ -530,14 +611,14 @@ describe('QueueService (Job-based)', () => {
     it('should emit delayed event for delayed jobs', async () => {
       const payload = { email: 'delayed-event@test.com', subject: 'Event' };
 
-      // 이벤트 발생 확인을 위한 spy
+      // NOTE: comment removed (non-ASCII).
       const emitSpy = jest.spyOn(eventEmitter, 'emit');
 
       await service.enqueue('delayed-event-queue', 'send-email', payload, {
-        delay: 50, // 50ms로 단축
+        delay: 50, // NOTE: comment removed (non-ASCII).
       });
 
-      // delayed 이벤트가 발생할 때까지 폴링
+      // NOTE: comment removed (non-ASCII).
       let attempts = 0;
       while (emitSpy.mock.calls.length === 0 && attempts < 50) {
         await new Promise((resolve) => setTimeout(resolve, 10));
@@ -553,7 +634,7 @@ describe('QueueService (Job-based)', () => {
     it('should track delayed jobs in statistics', async () => {
       const payload = { email: 'delayed-stats@test.com', subject: 'Stats' };
       await service.enqueue('delayed-stats-queue', 'send-email', payload, {
-        delay: 200, // 200ms로 단축
+        delay: 200, // NOTE: comment removed (non-ASCII).
       });
 
       const stats = service.getQueueStats('delayed-stats-queue');
@@ -563,7 +644,7 @@ describe('QueueService (Job-based)', () => {
     it('should return delayed jobs list', async () => {
       const payload = { email: 'delayed-list@test.com', subject: 'List' };
       await service.enqueue('delayed-list-queue', 'send-email', payload, {
-        delay: 300, // 300ms로 단축
+        delay: 300, // NOTE: comment removed (non-ASCII).
       });
 
       const delayedTasks = service.getDelayedTasks();
@@ -573,8 +654,119 @@ describe('QueueService (Job-based)', () => {
     });
   });
 
+  describe('Retry Backoff and Timeout', () => {
+    it('should apply backoff delay between retries', async () => {
+      const attemptTimes: number[] = [];
+      let callCount = 0;
+
+      service.registerProcessor('flaky-job', async () => {
+        attemptTimes.push(Date.now());
+        callCount++;
+        if (callCount === 1) {
+          throw new Error('Fail once');
+        }
+      });
+
+      await service.enqueue(
+        'backoff-queue',
+        'flaky-job',
+        { data: 'backoff' },
+        { retries: 1, backoff: { type: 'fixed', delay: 50 } }
+      );
+
+      let attempts = 0;
+      while (attemptTimes.length < 2 && attempts < 100) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        attempts++;
+      }
+
+      expect(attemptTimes).toHaveLength(2);
+      expect(attemptTimes[1] - attemptTimes[0]).toBeGreaterThanOrEqual(40);
+    });
+
+    it('should fail a task when timeout is exceeded', async () => {
+      (eventEmitter.emit as jest.Mock).mockClear();
+
+      service.registerProcessor('timeout-job', async () => {
+        await new Promise((resolve) => setTimeout(resolve, 30));
+      });
+
+      await service.enqueue(
+        'timeout-queue',
+        'timeout-job',
+        { data: 'timeout' },
+        { timeoutMs: 10 }
+      );
+
+      let attempts = 0;
+      let failedCall: any;
+      while (!failedCall && attempts < 100) {
+        failedCall = (eventEmitter.emit as jest.Mock).mock.calls.find(
+          (call) => call[0] === 'queue.task.failed'
+        );
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        attempts++;
+      }
+
+      expect(failedCall).toBeDefined();
+      expect(failedCall[1].error).toBeInstanceOf(Error);
+      expect(failedCall[1].error.message).toMatch(/timed out/i);
+    });
+  });
+
+  describe('Dead letter queue', () => {
+    it('should move failed tasks to the dead letter queue', async () => {
+      const dlqProcessed: any[] = [];
+      const module: TestingModule = await Test.createTestingModule({
+        imports: [
+          QueueModule.forRoot({
+            deadLetter: { queueName: 'dlq' },
+            processors: [
+              {
+                name: 'always-fail',
+                process: async () => {
+                  throw new Error('fail');
+                },
+              },
+              {
+                name: 'always-fail:deadletter',
+                process: async (payload: any) => {
+                  dlqProcessed.push(payload);
+                },
+              },
+            ],
+          }),
+        ],
+      }).compile();
+
+      const dlqService = module.get<QueueService>(QueueService);
+      const dlqEventEmitter = module.get<EventEmitter2>(EventEmitter2);
+      const emitSpy = jest.spyOn(dlqEventEmitter, 'emit');
+
+      const payload = { id: 'job-1' };
+      await dlqService.enqueue('primary', 'always-fail', payload);
+
+      let attempts = 0;
+      while (dlqProcessed.length === 0 && attempts < 100) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        attempts++;
+      }
+
+      expect(dlqProcessed).toHaveLength(1);
+      expect(dlqProcessed[0].originalPayload).toEqual(payload);
+      expect(dlqProcessed[0].fromQueue).toBe('primary');
+      expect(emitSpy).toHaveBeenCalledWith(
+        'queue.task.deadlettered',
+        expect.objectContaining({
+          queueName: 'dlq',
+          fromQueue: 'primary',
+        })
+      );
+    });
+  });
+
   describe('Job Cancellation', () => {
-    // 작업 취소 기능은 작동하지만 테스트 환경에서 불안정하므로 주석 처리
+    // NOTE: comment removed (non-ASCII).
     // it('should cancel pending delayed job', async () => { ... });
     // it('should handle job cancellation correctly', async () => { ... });
 
@@ -605,7 +797,7 @@ describe('QueueService (Job-based)', () => {
               concurrencyTracker.activeTasks.length
             );
 
-            await new Promise((resolve) => setTimeout(resolve, 20)); // 20ms로 단축
+            await new Promise((resolve) => setTimeout(resolve, 20)); // NOTE: comment removed (non-ASCII).
             concurrencyTracker.activeTasks.pop();
           },
         };
@@ -639,7 +831,7 @@ describe('QueueService (Job-based)', () => {
 
         await Promise.all(promises);
 
-        // 모든 작업이 완료될 때까지 폴링
+        // NOTE: comment removed (non-ASCII).
         let attempts = 0;
         while (
           concurrencyTracker.process.mock.calls.length < 5 &&
@@ -655,7 +847,7 @@ describe('QueueService (Job-based)', () => {
 
       it('should handle multiple concurrent jobs with proper tracking', async () => {
         const mockProcessor = jest.fn().mockImplementation(async () => {
-          await new Promise((resolve) => setTimeout(resolve, 20)); // 20ms로 단축
+          await new Promise((resolve) => setTimeout(resolve, 20)); // NOTE: comment removed (non-ASCII).
         });
 
         (concurrencyService as any)['processors'].set(
@@ -677,14 +869,14 @@ describe('QueueService (Job-based)', () => {
 
         await Promise.all(promises);
 
-        // 모든 작업이 완료될 때까지 폴링
+        // NOTE: comment removed (non-ASCII).
         let attempts = 0;
         while (mockProcessor.mock.calls.length < 3 && attempts < 100) {
           await new Promise((resolve) => setTimeout(resolve, 10));
           attempts++;
         }
 
-        // 추가 대기 시간을 주어 activeTasks가 정리되도록 함
+        // NOTE: comment removed (non-ASCII).
         await new Promise((resolve) => setTimeout(resolve, 50));
 
         const finalStats = concurrencyService.getQueueStats('multi-queue');
@@ -723,7 +915,7 @@ describe('QueueService (Job-based)', () => {
         shutdownService = module.get<QueueService>(QueueService);
         shutdownEventEmitter = module.get<EventEmitter2>(EventEmitter2);
 
-        // slowProcessor.process를 spy로 감싸기
+        // NOTE: comment removed (non-ASCII).
         jest.spyOn(slowProcessor, 'process');
       });
 
@@ -746,15 +938,15 @@ describe('QueueService (Job-based)', () => {
 
         const completionTracker = {
           async process(_payload: any): Promise<void> {
-            await new Promise((resolve) => setTimeout(resolve, 20)); // 20ms로 단축
+            await new Promise((resolve) => setTimeout(resolve, 20)); // NOTE: comment removed (non-ASCII).
             taskCompleted = true;
           },
         };
 
-        // completionTracker.process를 spy로 감싸기
+        // NOTE: comment removed (non-ASCII).
         jest.spyOn(completionTracker, 'process');
 
-        // 새로운 프로세서로 서비스 재생성
+        // NOTE: comment removed (non-ASCII).
         const module: TestingModule = await Test.createTestingModule({
           imports: [
             QueueModule.forRoot({
@@ -772,19 +964,19 @@ describe('QueueService (Job-based)', () => {
 
         const _payload = { data: 'active-task-test' };
 
-        // 작업 추가
+        // NOTE: comment removed (non-ASCII).
         const enqueuePromise = completionService.enqueue(
           'active-queue',
           'completion-job',
           _payload
         );
 
-        // 작업이 시작되기 전에 shutdown 시작
+        // NOTE: comment removed (non-ASCII).
         await new Promise((resolve) => setTimeout(resolve, 10));
         const shutdownPromise =
           completionService.onApplicationShutdown('SIGTERM');
 
-        // 작업이 완료될 때까지 폴링
+        // NOTE: comment removed (non-ASCII).
         let attempts = 0;
         while (!taskCompleted && attempts < 100) {
           await new Promise((resolve) => setTimeout(resolve, 10));
@@ -958,20 +1150,20 @@ describe('Queue Management', () => {
 
   describe('clearQueue', () => {
     it('should clear specific queue', async () => {
-      // Queue에 작업 추가
+      // NOTE: comment removed (non-ASCII).
       await service.enqueue('test-queue', 'test-job', { data: 'test1' });
       await service.enqueue('test-queue', 'test-job', { data: 'test2' });
       await service.enqueue('other-queue', 'test-job', { data: 'test3' });
 
-      // 통계 확인
+      // NOTE: comment removed (non-ASCII).
       const statsBefore = service.getAllQueueStats();
       expect(statsBefore.length).toBeGreaterThan(0);
 
-      // 특정 큐만 클리어
+      // NOTE: comment removed (non-ASCII).
       const clearedCount = service.clearQueue('test-queue');
       expect(clearedCount).toBe(2);
 
-      // 다른 큐는 그대로 유지
+      // NOTE: comment removed (non-ASCII).
       const statsAfter = service.getAllQueueStats();
       const otherQueueStats = statsAfter.find(
         (s) => s.queueName === 'other-queue'
@@ -987,16 +1179,16 @@ describe('Queue Management', () => {
 
   describe('clearAllQueues', () => {
     it('should clear all queues', async () => {
-      // 여러 큐에 작업 추가
+      // NOTE: comment removed (non-ASCII).
       await service.enqueue('queue-1', 'test-job', { data: 'test1' });
       await service.enqueue('queue-2', 'test-job', { data: 'test2' });
       await service.enqueue('queue-3', 'test-job', { data: 'test3' });
 
-      // 모든 큐 클리어
+      // NOTE: comment removed (non-ASCII).
       const clearedCount = service.clearAllQueues();
       expect(clearedCount).toBe(3);
 
-      // 모든 큐가 비어있는지 확인
+      // NOTE: comment removed (non-ASCII).
       const stats = service.getAllQueueStats();
       const totalPending = stats.reduce(
         (sum, queue) => sum + queue.pendingTasks,
@@ -1070,20 +1262,26 @@ describe('Task Management', () => {
     });
 
     it('should return delayed status for delayed task', async () => {
-      const taskId = await service.enqueue(
-        'test-queue',
-        'test-job',
-        { data: 'test' },
-        { delay: 1000 }
-      );
+      jest.useFakeTimers();
+      try {
+        const taskId = await service.enqueue(
+          'test-queue',
+          'test-job',
+          { data: 'test' },
+          { delay: 1000 }
+        );
 
-      const status = service.getTaskStatus(taskId);
+        const status = service.getTaskStatus(taskId);
 
-      expect(status.status).toBe('delayed');
-      expect(status.taskId).toBe(taskId);
-      if (status.status === 'delayed') {
-        expect(status.scheduledAt).toBeDefined();
-        expect(status.delay).toBeGreaterThanOrEqual(0);
+        expect(status.status).toBe('delayed');
+        expect(status.taskId).toBe(taskId);
+        if (status.status === 'delayed') {
+          expect(status.scheduledAt).toBeDefined();
+          expect(status.delay).toBeGreaterThanOrEqual(0);
+        }
+      } finally {
+        jest.clearAllTimers();
+        jest.useRealTimers();
       }
     });
 
@@ -1091,7 +1289,7 @@ describe('Task Management', () => {
       const payload = { data: 'test' };
       const taskId = await service.enqueue('test-queue', 'test-job', payload);
 
-      // 작업이 완료될 때까지 대기
+      // NOTE: comment removed (non-ASCII).
       let attempts = 0;
       while (attempts < 50) {
         const status = service.getTaskStatus(taskId);
@@ -1135,17 +1333,17 @@ describe('Task Management', () => {
 
   describe('getActiveTasksByQueue', () => {
     it('should return active tasks in queue', async () => {
-      // 느린 작업을 실행
+      // NOTE: comment removed (non-ASCII).
       const taskId = await service.enqueue('test-queue', 'slow-job', {
         data: 'slow',
       });
 
-      // 작업이 시작될 때까지 잠시 대기
+      // NOTE: comment removed (non-ASCII).
       await new Promise((resolve) => setTimeout(resolve, 10));
 
       const activeTasks = service.getActiveTasksByQueue('test-queue');
 
-      // 작업이 활성 상태인지 확인
+      // NOTE: comment removed (non-ASCII).
       const hasActiveTask = activeTasks.some((task) => task.id === taskId);
       expect(hasActiveTask).toBe(true);
     });
@@ -1153,6 +1351,174 @@ describe('Task Management', () => {
     it('should return empty array when no active tasks', () => {
       const activeTasks = service.getActiveTasksByQueue('test-queue');
       expect(activeTasks).toEqual([]);
+    });
+  });
+
+  describe('State persistence', () => {
+    it('should restore pending tasks from saved state', async () => {
+      const persistencePath = path.join(
+        os.tmpdir(),
+        `queue-state-${Date.now()}.json`
+      );
+
+      const localEmailProcessor = new TestEmailProcessor();
+
+      const processors: QueueProcessor[] = [
+        {
+          name: 'persisted-email',
+          process: localEmailProcessor.process.bind(localEmailProcessor),
+        },
+      ];
+
+      const mockLogger = {
+        log: jest.fn(),
+        error: jest.fn(),
+        warn: jest.fn(),
+        debug: jest.fn(),
+        verbose: jest.fn(),
+      };
+
+      const pendingModule: TestingModule = await Test.createTestingModule({
+        imports: [
+          QueueModule.forRoot({
+            processors,
+            enablePersistence: true,
+            persistencePath,
+            concurrency: 0,
+            logger: mockLogger as any,
+          }),
+        ],
+      }).compile();
+
+      const pendingService = pendingModule.get<QueueService>(QueueService);
+
+      await pendingService.enqueue('persist-queue', 'persisted-email', {
+        email: 'a@test.com',
+        subject: 'A',
+      });
+      await pendingService.enqueue('persist-queue', 'persisted-email', {
+        email: 'b@test.com',
+        subject: 'B',
+      });
+
+      await (pendingService as any).savePersistedState();
+
+      const restoreModule: TestingModule = await Test.createTestingModule({
+        imports: [
+          QueueModule.forRoot({
+            processors,
+            enablePersistence: true,
+            persistencePath,
+            concurrency: 0,
+            logger: mockLogger as any,
+          }),
+        ],
+      }).compile();
+
+      const restoreService = restoreModule.get<QueueService>(QueueService);
+      await restoreService.onModuleInit();
+
+      const restoredTasks = restoreService.getTasksByQueue('persist-queue');
+
+      expect(restoredTasks).toHaveLength(2);
+      expect(restoredTasks.map((task) => task.payload)).toEqual([
+        { email: 'a@test.com', subject: 'A' },
+        { email: 'b@test.com', subject: 'B' },
+      ]);
+      expect(
+        restoredTasks.every((task) => task.queueName === 'persist-queue')
+      ).toBe(true);
+
+      if (fs.existsSync(persistencePath)) {
+        fs.unlinkSync(persistencePath);
+      }
+    });
+
+    it('should restore delayed tasks with proper execution callbacks', async () => {
+      const persistencePath = path.join(
+        os.tmpdir(),
+        `queue-state-delayed-${Date.now()}.json`
+      );
+
+      const localEmailProcessor = new TestEmailProcessor();
+
+      const processors: QueueProcessor[] = [
+        {
+          name: 'persisted-delayed-email',
+          process: localEmailProcessor.process.bind(localEmailProcessor),
+        },
+      ];
+
+      const mockLogger = {
+        log: jest.fn(),
+        error: jest.fn(),
+        warn: jest.fn(),
+        debug: jest.fn(),
+        verbose: jest.fn(),
+      };
+
+      const pendingModule: TestingModule = await Test.createTestingModule({
+        imports: [
+          QueueModule.forRoot({
+            processors,
+            enablePersistence: true,
+            persistencePath,
+            concurrency: 0,
+            logger: mockLogger as any,
+          }),
+        ],
+      }).compile();
+
+      const pendingService = pendingModule.get<QueueService>(QueueService);
+
+      await pendingService.enqueue(
+        'delayed-queue',
+        'persisted-delayed-email',
+        {
+          email: 'delay@test.com',
+          subject: 'Delayed',
+        },
+        {
+          delay: 200,
+        }
+      );
+
+      await (pendingService as any).savePersistedState();
+      await pendingModule.close();
+
+      const restoreModule: TestingModule = await Test.createTestingModule({
+        imports: [
+          QueueModule.forRoot({
+            processors,
+            enablePersistence: true,
+            persistencePath,
+            concurrency: 1,
+            logger: mockLogger as any,
+          }),
+        ],
+      }).compile();
+
+      const restoreService = restoreModule.get<QueueService>(QueueService);
+      await restoreService.onModuleInit();
+
+      let attempts = 0;
+      while (
+        localEmailProcessor.processedPayloads.length === 0 &&
+        attempts < 50
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        attempts++;
+      }
+
+      expect(localEmailProcessor.processedPayloads).toEqual([
+        { email: 'delay@test.com', subject: 'Delayed' },
+      ]);
+
+      await restoreModule.close();
+
+      if (fs.existsSync(persistencePath)) {
+        fs.unlinkSync(persistencePath);
+      }
     });
   });
 });

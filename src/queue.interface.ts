@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common';
+﻿import { Logger } from '@nestjs/common';
 
 /**
  * Options passed by library users through QueueModule.forRoot()
@@ -10,6 +10,25 @@ export interface QueueModuleOptions {
   enablePersistence?: boolean; // Enable state persistence
   persistencePath?: string; // State persistence file path
   processors?: QueueProcessor[]; // Job processor registration
+  limiter?: RateLimiterOptions; // Rate limiting configuration
+  deadLetter?: DeadLetterOptions; // Dead letter queue configuration
+}
+
+/**
+ * Rate limiter configuration
+ */
+export interface RateLimiterOptions {
+  max: number; // Max tasks allowed within duration
+  duration: number; // Window size in ms
+  groupKey?: string; // Optional payload key for group-based limiting
+}
+
+/**
+ * Dead letter queue configuration
+ */
+export interface DeadLetterOptions {
+  queueName: string; // DLQ queue name
+  jobName?: string; // Optional DLQ job name override
 }
 
 /**
@@ -31,6 +50,20 @@ export enum TaskPriority {
 }
 
 /**
+ * Backoff strategy types
+ */
+export type BackoffType = 'fixed' | 'exponential';
+
+/**
+ * Backoff configuration
+ */
+export interface BackoffOptions {
+  type?: BackoffType;
+  delay: number; // Base delay in ms
+  maxDelay?: number; // Optional max delay cap in ms
+}
+
+/**
  * Interface for managing tasks within the queue
  */
 export interface Task<T> {
@@ -40,12 +73,17 @@ export interface Task<T> {
   resolve: () => void;
   reject: (reason?: any) => void;
   retries: number;
+  maxRetries: number;
+  attemptsMade: number;
   priority: TaskPriority;
+  backoff?: BackoffOptions;
+  timeoutMs?: number;
   promise: Promise<void>; // Promise for tracking task completion
   createdAt: Date; // Task creation time
   delay?: number; // Delay time (ms)
   scheduledAt?: Date; // Scheduled execution time
   queueName?: string; // Queue name (for delayed tasks)
+  deadLettered?: boolean; // Task moved to dead letter queue
 }
 
 /**
@@ -100,6 +138,8 @@ export interface EnqueueOptions {
   retries?: number;
   priority?: TaskPriority;
   delay?: number;
+  backoff?: BackoffOptions;
+  timeoutMs?: number;
 }
 
 /**

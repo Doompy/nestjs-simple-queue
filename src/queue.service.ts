@@ -1,4 +1,4 @@
-import {
+﻿import {
   Injectable,
   Inject,
   Logger,
@@ -16,6 +16,9 @@ import {
   DelayedTaskInfo,
   ProcessorManagement,
   TaskStatus,
+  EnqueueOptions,
+  RateLimiterOptions,
+  DeadLetterOptions,
 } from './queue.interface';
 
 @Injectable()
@@ -24,15 +27,33 @@ export class QueueService
 {
   private readonly logger: Logger;
   private queues = new Map<string, Task<any>[]>();
-  private currentTasks = new Map<string, Task<any>[]>(); // 큐 이름당 실행 중인 작업 배열
-  private delayedTasks = new Map<string, Task<any>>(); // 지연된 작업들
+  private currentTasks = new Map<string, Task<any>[]>(); // Running tasks per queue
+  private delayedTasks = new Map<string, Task<any>>(); // Delayed tasks
   private readonly concurrency: number;
   private activeTasks = new Map<string, number>();
   private readonly gracefulShutdownTimeout: number;
   private readonly enablePersistence: boolean;
   private readonly persistencePath: string;
+  private readonly limiter?: RateLimiterOptions;
+  private readonly deadLetter?: DeadLetterOptions;
   private isShuttingDown = false;
-  private processors = new Map<string, (payload: any) => Promise<void>>(); // Job 프로세서 맵
+  private processors = new Map<string, (payload: any) => Promise<void>>(); // Job processor map
+  private rateLimitState = new Map<string, number[]>();
+  private rateLimitTimers = new Map<string, NodeJS.Timeout>();
+
+  private ensureQueueInitialized(queueName: string): void {
+    if (!this.queues.has(queueName)) {
+      this.queues.set(queueName, []);
+    }
+
+    if (!this.activeTasks.has(queueName)) {
+      this.activeTasks.set(queueName, 0);
+    }
+
+    if (!this.currentTasks.has(queueName)) {
+      this.currentTasks.set(queueName, []);
+    }
+  }
 
   constructor(
     @Inject('QUEUE_OPTIONS') private options: QueueModuleOptions,
@@ -43,8 +64,10 @@ export class QueueService
     this.gracefulShutdownTimeout = options.gracefulShutdownTimeout || 30000;
     this.enablePersistence = options.enablePersistence || false;
     this.persistencePath = options.persistencePath || './queue-state.json';
+    this.limiter = options.limiter;
+    this.deadLetter = options.deadLetter;
 
-    // Job 프로세서 등록
+    // Register job processors
     if (options.processors) {
       for (const processor of options.processors) {
         this.processors.set(processor.name, processor.process);
@@ -62,13 +85,9 @@ export class QueueService
     queueName: string,
     jobName: string,
     payload: T,
-    options?: {
-      retries?: number;
-      priority?: TaskPriority;
-      delay?: number; // 지연 시간 (ms)
-    }
+    options?: EnqueueOptions
   ): Promise<string> {
-    // taskId를 반환하도록 변경
+    // Return taskId to the caller
     if (this.isShuttingDown) {
       throw new Error(
         'Queue service is shutting down. Cannot enqueue new tasks.'
@@ -90,17 +109,22 @@ export class QueueService
       taskResolve = resolve;
       taskReject = reject;
     });
+    taskPromise.catch(() => {
+      // Prevent unhandled rejection warnings; task failures are handled via events/logging.
+    });
 
     const retries = options?.retries || 0;
     const priority = options?.priority || TaskPriority.NORMAL;
     const delay = options?.delay || 0;
+    const backoff = options?.backoff;
+    const timeoutMs = options?.timeoutMs;
 
     const taskId = this.generateTaskId();
     const createdAt = new Date();
     const scheduledAt =
       delay > 0 ? new Date(createdAt.getTime() + delay) : undefined;
 
-    // Job 프로세서 확인
+    // Validate job processor
     const processor = this.processors.get(jobName);
     if (!processor) {
       throw new Error(
@@ -115,7 +139,11 @@ export class QueueService
       resolve: taskResolve!,
       reject: taskReject!,
       retries,
+      maxRetries: retries,
+      attemptsMade: 0,
       priority,
+      backoff,
+      timeoutMs,
       promise: taskPromise,
       createdAt,
       delay,
@@ -123,7 +151,7 @@ export class QueueService
     };
 
     if (delay > 0) {
-      // 지연된 작업 처리 - 큐 이름을 taskData에 저장
+      // Handle delayed task - persist queue name on task data
       taskData.queueName = queueName;
       this.delayedTasks.set(taskId, taskData);
       this.eventEmitter.emit('queue.task.delayed', {
@@ -131,18 +159,18 @@ export class QueueService
         task: taskData,
       });
 
-      // 지연 시간 후에 큐에 추가
+      // Add to queue after delay
       setTimeout(() => {
         this.addDelayedTaskToQueue(queueName, taskData);
       }, delay);
     } else {
-      // 즉시 큐에 추가
+      // Add to queue immediately
       queue.push(taskData);
       this.eventEmitter.emit('queue.task.added', { queueName, task: taskData });
       setImmediate(() => this.processQueue(queueName));
     }
 
-    return taskId; // taskId 반환
+    return taskId; // Return taskId
   }
 
   /**
@@ -170,7 +198,7 @@ export class QueueService
         const task = queue.splice(taskIndex, 1)[0];
         try {
           task.reject(new Error('Task cancelled'));
-        } catch (error) {
+        } catch {
           // Ignore Promise reject errors (Promise might already be handled)
         }
         this.eventEmitter.emit('queue.task.cancelled', { queueName, task });
@@ -184,7 +212,7 @@ export class QueueService
       this.delayedTasks.delete(taskId);
       try {
         delayedTask.reject(new Error('Task cancelled'));
-      } catch (error) {
+      } catch {
         // Ignore Promise reject errors (Promise might already be handled)
       }
       this.eventEmitter.emit('queue.task.cancelled', {
@@ -236,6 +264,12 @@ export class QueueService
       return;
     }
 
+    const rateLimitDelay = this.getRateLimitDelay(queueName, queue[0]);
+    if (rateLimitDelay > 0) {
+      this.scheduleRateLimitRetry(queueName, rateLimitDelay);
+      return;
+    }
+
     // Sort once before executing task
     this.sortQueueByPriority(queue);
     const task = queue.shift();
@@ -266,6 +300,7 @@ export class QueueService
     this.currentTasks.set(queueName, runningTasks);
 
     try {
+      task.attemptsMade = (task.attemptsMade || 0) + 1;
       this.eventEmitter.emit('queue.task.processing', { queueName, task });
 
       // Find processor by jobName
@@ -274,7 +309,7 @@ export class QueueService
         throw new Error(`Processor not found for job: ${task.jobName}`);
       }
 
-      await processor(task.payload);
+      await this.executeWithTimeout(task, processor);
       task.resolve();
       this.eventEmitter.emit('queue.task.success', { queueName, task });
     } catch (error) {
@@ -288,12 +323,25 @@ export class QueueService
 
       if (task.retries > 0) {
         task.retries--;
-        this.queues.get(queueName)?.unshift(task); // Only unshift if queue exists
+        const backoffDelay = this.calculateBackoffDelay(task);
+        if (backoffDelay && backoffDelay > 0) {
+          task.delay = backoffDelay;
+          task.scheduledAt = new Date(Date.now() + backoffDelay);
+          task.queueName = queueName;
+          this.delayedTasks.set(task.id, task);
+          this.eventEmitter.emit('queue.task.delayed', { queueName, task });
+          setTimeout(() => {
+            this.addDelayedTaskToQueue(queueName, task);
+          }, backoffDelay);
+        } else {
+          this.queues.get(queueName)?.unshift(task); // Only unshift if queue exists
+        }
       } else {
+        this.moveToDeadLetter(queueName, task, error);
         try {
           task.reject(error);
-        } catch (rejectionError) {
-          // Promise rejection 에러를 무시 (이미 처리된 Promise일 수 있음)
+        } catch {
+          // Ignore promise rejection errors (may already be handled)
         }
       }
     } finally {
@@ -318,6 +366,187 @@ export class QueueService
         this.eventEmitter.emit('queue.empty', { queueName });
       }
     }
+  }
+
+  /**
+   * Calculate rate limit delay for a queue
+   */
+  private getRateLimitDelay(queueName: string, task?: Task<any>): number {
+    if (!this.limiter) return 0;
+
+    const { max, duration } = this.limiter;
+    if (max <= 0 || duration <= 0) return 0;
+
+    const now = Date.now();
+    const windowStart = now - duration;
+    const key = this.getRateLimitKey(queueName, task);
+    const timestamps = this.rateLimitState.get(key) || [];
+    const recent = timestamps.filter((timestamp) => timestamp > windowStart);
+    this.rateLimitState.set(key, recent);
+
+    if (recent.length < max) {
+      recent.push(now);
+      return 0;
+    }
+
+    const earliest = Math.min(...recent);
+    return Math.max(1, earliest + duration - now);
+  }
+
+  /**
+   * Build a rate limit key for the queue, optionally scoped by groupKey
+   */
+  private getRateLimitKey(queueName: string, task?: Task<any>): string {
+    if (!this.limiter?.groupKey || !task) return queueName;
+
+    const groupKey = this.limiter.groupKey;
+    const value = this.getNestedValue(task.payload, groupKey);
+    if (value === undefined || value === null || value === '') {
+      return queueName;
+    }
+    return `${queueName}:${String(value)}`;
+  }
+
+  /**
+   * Read nested values from payload using dot-notation keys
+   */
+  private getNestedValue(payload: any, pathKey: string): any {
+    if (!payload || typeof payload !== 'object') return undefined;
+
+    return pathKey.split('.').reduce((acc: any, part) => {
+      if (acc === undefined || acc === null) return undefined;
+      return acc[part];
+    }, payload);
+  }
+
+  /**
+   * Schedule a queue processing retry when rate limited
+   */
+  private scheduleRateLimitRetry(queueName: string, delayMs: number): void {
+    if (this.rateLimitTimers.has(queueName)) return;
+
+    const timer = setTimeout(() => {
+      this.rateLimitTimers.delete(queueName);
+      this.processQueue(queueName);
+    }, delayMs);
+    this.rateLimitTimers.set(queueName, timer);
+  }
+
+  /**
+   * Move a failed task to the dead letter queue
+   */
+  private moveToDeadLetter(
+    queueName: string,
+    task: Task<any>,
+    error: unknown
+  ): void {
+    if (!this.deadLetter) return;
+    if (task.deadLettered) return;
+    if (queueName === this.deadLetter.queueName) return;
+
+    const dlqJobName = this.deadLetter.jobName || `${task.jobName}:deadletter`;
+    if (!this.processors.has(dlqJobName)) {
+      this.logger.warn(
+        `DLQ processor '${dlqJobName}' not registered. Skipping dead letter move.`
+      );
+      return;
+    }
+
+    const errorMessage =
+      error instanceof Error ? error.message : 'An unknown error occurred';
+    let taskResolve: () => void;
+    let taskReject: (reason?: any) => void;
+
+    const taskPromise = new Promise<void>((resolve, reject) => {
+      taskResolve = resolve;
+      taskReject = reject;
+    });
+    taskPromise.catch(() => {
+      // Prevent unhandled rejection warnings; task failures are handled via events/logging.
+    });
+
+    const dlqTask: Task<any> = {
+      id: this.generateTaskId(),
+      payload: {
+        originalPayload: task.payload,
+        error: errorMessage,
+        fromQueue: queueName,
+        jobName: task.jobName,
+        taskId: task.id,
+      },
+      jobName: dlqJobName,
+      resolve: taskResolve!,
+      reject: taskReject!,
+      retries: 0,
+      maxRetries: 0,
+      attemptsMade: 0,
+      priority: task.priority,
+      promise: taskPromise,
+      createdAt: new Date(),
+      queueName: this.deadLetter.queueName,
+    };
+
+    dlqTask.deadLettered = true;
+
+    this.ensureQueueInitialized(this.deadLetter.queueName);
+    const dlqQueue = this.queues.get(this.deadLetter.queueName)!;
+    dlqQueue.push(dlqTask);
+    this.eventEmitter.emit('queue.task.deadlettered', {
+      queueName: this.deadLetter.queueName,
+      task: dlqTask,
+      fromQueue: queueName,
+    });
+    this.processQueue(this.deadLetter.queueName);
+  }
+
+  /**
+   * Execute task with optional timeout
+   */
+  private async executeWithTimeout(
+    task: Task<any>,
+    processor: (payload: any) => Promise<void>
+  ): Promise<void> {
+    if (!task.timeoutMs || task.timeoutMs <= 0) {
+      await processor(task.payload);
+      return;
+    }
+
+    let timeoutId: NodeJS.Timeout | undefined;
+    const timeoutPromise = new Promise<void>((_, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(new Error(`Task timed out after ${task.timeoutMs}ms`));
+      }, task.timeoutMs);
+    });
+
+    try {
+      await Promise.race([processor(task.payload), timeoutPromise]);
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    }
+  }
+
+  /**
+   * Calculate backoff delay for a retry
+   */
+  private calculateBackoffDelay(task: Task<any>): number | null {
+    const backoff = task.backoff;
+    if (!backoff || !backoff.delay || backoff.delay <= 0) {
+      return null;
+    }
+
+    const attempt = Math.max(1, task.attemptsMade || 1);
+    const baseDelay =
+      backoff.type === 'exponential'
+        ? backoff.delay * Math.pow(2, attempt - 1)
+        : backoff.delay;
+
+    if (backoff.maxDelay && backoff.maxDelay > 0) {
+      return Math.min(baseDelay, backoff.maxDelay);
+    }
+
+    return baseDelay;
   }
 
   /**
@@ -464,6 +693,11 @@ export class QueueService
     // Clear delayed tasks
     const delayedCount = this.delayedTasks.size;
     this.delayedTasks.clear();
+    this.rateLimitState.clear();
+    for (const timer of this.rateLimitTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.rateLimitTimers.clear();
 
     this.logger.log(
       `Cleared all queues. Removed ${totalCleared + delayedCount} tasks`
@@ -494,6 +728,16 @@ export class QueueService
         this.delayedTasks.delete(taskId);
         delayedCount++;
       }
+    }
+    for (const key of this.rateLimitState.keys()) {
+      if (key === queueName || key.startsWith(`${queueName}:`)) {
+        this.rateLimitState.delete(key);
+      }
+    }
+    const timer = this.rateLimitTimers.get(queueName);
+    if (timer) {
+      clearTimeout(timer);
+      this.rateLimitTimers.delete(queueName);
     }
 
     this.logger.log(
@@ -694,9 +938,26 @@ export class QueueService
         taskResolve = resolve;
         taskReject = reject;
       });
+      taskPromise.catch(() => {
+        // Prevent unhandled rejection warnings; task failures are handled via events/logging.
+      });
 
       return {
         ...serializedTask,
+        retries:
+          typeof serializedTask.retries === 'number'
+            ? serializedTask.retries
+            : 0,
+        maxRetries:
+          typeof serializedTask.maxRetries === 'number'
+            ? serializedTask.maxRetries
+            : typeof serializedTask.retries === 'number'
+              ? serializedTask.retries
+              : 0,
+        attemptsMade:
+          typeof serializedTask.attemptsMade === 'number'
+            ? serializedTask.attemptsMade
+            : 0,
         resolve: taskResolve!,
         reject: taskReject!,
         promise: taskPromise,
@@ -725,51 +986,79 @@ export class QueueService
 
       // Restore queue state (don't restore running tasks)
       if (state.queues) {
-        for (const [queueName] of state.queues) {
-          this.queues.set(queueName, []);
+        for (const [queueName, serializedTasks] of state.queues) {
+          const queue: Task<any>[] = [];
+
+          if (Array.isArray(serializedTasks)) {
+            for (const serializedTask of serializedTasks) {
+              const task = await this.deserializeTask(serializedTask);
+              if (task) {
+                task.queueName = queueName;
+                queue.push(task);
+              }
+            }
+
+            // Ensure restored tasks respect priority ordering
+            this.sortQueueByPriority(queue);
+          }
+
+          this.queues.set(queueName, queue);
           this.activeTasks.set(queueName, 0);
           this.currentTasks.set(queueName, []);
+
+          if (queue.length > 0) {
+            setImmediate(() => this.processQueue(queueName));
+          }
         }
       }
 
       // Restore delayed tasks and reset timers
       if (state.delayedTasks) {
         for (const [taskId, taskData] of state.delayedTasks) {
-          if (taskData.scheduledAt) {
-            const scheduledTime = new Date(taskData.scheduledAt);
-            const now = new Date();
-            const remainingDelay = scheduledTime.getTime() - now.getTime();
+          if (!taskData.scheduledAt) {
+            continue;
+          }
 
-            if (remainingDelay > 0) {
-              // Restore delayed task that hasn't reached execution time yet
-              this.delayedTasks.set(taskId, {
-                ...taskData,
-                scheduledAt: scheduledTime,
-              });
+          const deserializedTask = await this.deserializeTask(taskData);
+          if (!deserializedTask) {
+            continue;
+          }
 
-              // Reset timer
-              setTimeout(() => {
-                this.addDelayedTaskToQueue(
-                  taskData.queueName || 'default',
-                  taskData
-                );
-              }, remainingDelay);
+          const queueName = taskData.queueName || 'default';
+          deserializedTask.queueName = queueName;
 
-              this.logger.log(
-                `Restored delayed task ${taskId} with ${remainingDelay}ms remaining`
-              );
-            } else {
-              // Add overdue delayed task to queue immediately
-              const queueName = taskData.queueName || 'default';
-              const queue = this.queues.get(queueName) || [];
-              queue.push(taskData);
-              this.queues.set(queueName, queue);
+          this.ensureQueueInitialized(queueName);
 
-              this.logger.log(
-                `Restored overdue delayed task ${taskId} to queue immediately`
-              );
-              this.processQueue(queueName);
-            }
+          const scheduledTime = new Date(taskData.scheduledAt);
+          const now = new Date();
+          const remainingDelay = scheduledTime.getTime() - now.getTime();
+
+          if (remainingDelay > 0) {
+            // Restore delayed task that hasn't reached execution time yet
+            this.delayedTasks.set(taskId, {
+              ...deserializedTask,
+              scheduledAt: scheduledTime,
+            });
+
+            // Reset timer
+            setTimeout(() => {
+              this.addDelayedTaskToQueue(queueName, deserializedTask);
+            }, remainingDelay);
+
+            this.logger.log(
+              `Restored delayed task ${taskId} with ${remainingDelay}ms remaining`
+            );
+          } else {
+            // Add overdue delayed task to queue immediately
+            const queue = this.queues.get(queueName) || [];
+            queue.push(deserializedTask);
+            this.sortQueueByPriority(queue);
+            this.queues.set(queueName, queue);
+
+            this.logger.log(
+              `Restored overdue delayed task ${taskId} to queue immediately`
+            );
+            this.processQueue(queueName);
           }
         }
       }
