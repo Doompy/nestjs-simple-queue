@@ -1,7 +1,7 @@
 {
   "name": "nestjs-simple-queue",
-  "version": "3.2.0",
-  "description": "A simple, generic, in-memory task queue service for NestJS",
+  "version": "3.2.1",
+  "description": "A predictable, in-process job queue for NestJS — no Redis, no workers, no surprises.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -20,13 +20,19 @@
   },
   "keywords": [
     "nestjs",
+    "nest",
     "queue",
-    "task",
-    "in-memory",
-    "typescript",
-    "async",
-    "retry",
-    "event-driven"
+    "job queue",
+    "background jobs",
+    "task queue",
+    "in-memory queue",
+    "simple queue",
+    "bull",
+    "bullmq",
+    "redis alternative",
+    "worker",
+    "scheduler",
+    "async jobs"
   ],
   "author": "doompy17",
   "license": "MIT",
