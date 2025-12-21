@@ -40,6 +40,7 @@ export class QueueService
   private processors = new Map<string, (payload: any) => Promise<void>>(); // Job processor map
   private rateLimitState = new Map<string, number[]>();
   private rateLimitTimers = new Map<string, NodeJS.Timeout>();
+  private dedupeIndex = new Map<string, Map<string, string>>();
 
   private ensureQueueInitialized(queueName: string): void {
     if (!this.queues.has(queueName)) {
@@ -52,6 +53,10 @@ export class QueueService
 
     if (!this.currentTasks.has(queueName)) {
       this.currentTasks.set(queueName, []);
+    }
+
+    if (!this.dedupeIndex.has(queueName)) {
+      this.dedupeIndex.set(queueName, new Map());
     }
   }
 
@@ -96,10 +101,12 @@ export class QueueService
 
     let queue = this.queues.get(queueName);
     if (!queue) {
+      this.ensureQueueInitialized(queueName);
+      queue = this.queues.get(queueName);
+    }
+    if (!queue) {
       queue = [];
       this.queues.set(queueName, queue);
-      this.activeTasks.set(queueName, 0);
-      this.currentTasks.set(queueName, []);
     }
 
     let taskResolve: () => void;
@@ -118,6 +125,24 @@ export class QueueService
     const delay = options?.delay || 0;
     const backoff = options?.backoff;
     const timeoutMs = options?.timeoutMs;
+    const jobId = options?.jobId;
+    const dedupe = options?.dedupe || 'drop';
+
+    if (jobId) {
+      const runningTaskId = this.findRunningTaskId(queueName, jobId);
+      if (runningTaskId) {
+        return runningTaskId;
+      }
+
+      const existingTaskId = this.getDedupeTaskId(queueName, jobId);
+      if (existingTaskId) {
+        if (dedupe === 'replace') {
+          this.cancelByJobId(queueName, jobId);
+        } else {
+          return existingTaskId;
+        }
+      }
+    }
 
     const taskId = this.generateTaskId();
     const createdAt = new Date();
@@ -136,6 +161,7 @@ export class QueueService
       id: taskId,
       payload,
       jobName,
+      jobId,
       resolve: taskResolve!,
       reject: taskReject!,
       retries,
@@ -154,6 +180,7 @@ export class QueueService
       // Handle delayed task - persist queue name on task data
       taskData.queueName = queueName;
       this.delayedTasks.set(taskId, taskData);
+      this.trackDedupeIndex(queueName, taskData);
       this.eventEmitter.emit('queue.task.delayed', {
         queueName,
         task: taskData,
@@ -166,6 +193,7 @@ export class QueueService
     } else {
       // Add to queue immediately
       queue.push(taskData);
+      this.trackDedupeIndex(queueName, taskData);
       this.eventEmitter.emit('queue.task.added', { queueName, task: taskData });
       setImmediate(() => this.processQueue(queueName));
     }
@@ -196,6 +224,7 @@ export class QueueService
       const taskIndex = queue.findIndex((task) => task.id === taskId);
       if (taskIndex !== -1) {
         const task = queue.splice(taskIndex, 1)[0];
+        this.clearDedupeIndex(queueName, task);
         try {
           task.reject(new Error('Task cancelled'));
         } catch {
@@ -210,6 +239,7 @@ export class QueueService
     const delayedTask = this.delayedTasks.get(taskId);
     if (delayedTask && delayedTask.scheduledAt) {
       this.delayedTasks.delete(taskId);
+      this.clearDedupeIndex(delayedTask.queueName || queueName, delayedTask);
       try {
         delayedTask.reject(new Error('Task cancelled'));
       } catch {
@@ -223,6 +253,40 @@ export class QueueService
     }
 
     return false;
+  }
+
+  /**
+   * Cancel pending or delayed tasks by jobId (running tasks are not affected)
+   */
+  cancelByJobId(queueName: string, jobId: string): boolean {
+    let cancelled = false;
+
+    const queue = this.queues.get(queueName);
+    if (queue && queue.length > 0) {
+      const pendingMatches = queue.filter((task) => task.jobId === jobId);
+      for (const task of pendingMatches) {
+        if (this.cancelTask(queueName, task.id)) {
+          cancelled = true;
+        }
+      }
+    }
+
+    for (const [taskId, task] of this.delayedTasks) {
+      if ((task.queueName || queueName) !== queueName) continue;
+      if (task.jobId !== jobId) continue;
+      if (this.cancelTask(queueName, taskId)) {
+        cancelled = true;
+      }
+    }
+
+    if (!cancelled) {
+      const index = this.getQueueDedupeIndex(queueName);
+      if (index.has(jobId)) {
+        index.delete(jobId);
+      }
+    }
+
+    return cancelled;
   }
 
   /**
@@ -275,6 +339,7 @@ export class QueueService
     const task = queue.shift();
 
     if (task) {
+      this.clearDedupeIndex(queueName, task);
       this.runTask(queueName, task);
     }
   }
@@ -329,12 +394,14 @@ export class QueueService
           task.scheduledAt = new Date(Date.now() + backoffDelay);
           task.queueName = queueName;
           this.delayedTasks.set(task.id, task);
+          this.trackDedupeIndex(queueName, task);
           this.eventEmitter.emit('queue.task.delayed', { queueName, task });
           setTimeout(() => {
             this.addDelayedTaskToQueue(queueName, task);
           }, backoffDelay);
         } else {
           this.queues.get(queueName)?.unshift(task); // Only unshift if queue exists
+          this.trackDedupeIndex(queueName, task);
         }
       } else {
         this.moveToDeadLetter(queueName, task, error);
@@ -391,6 +458,71 @@ export class QueueService
 
     const earliest = Math.min(...recent);
     return Math.max(1, earliest + duration - now);
+  }
+
+  /**
+   * Get the dedupe index for a queue
+   */
+  private getQueueDedupeIndex(queueName: string): Map<string, string> {
+    let index = this.dedupeIndex.get(queueName);
+    if (!index) {
+      index = new Map();
+      this.dedupeIndex.set(queueName, index);
+    }
+    return index;
+  }
+
+  /**
+   * Track a task in the dedupe index when it is pending or delayed
+   */
+  private trackDedupeIndex(queueName: string, task: Task<any>): void {
+    if (!task.jobId) return;
+    const index = this.getQueueDedupeIndex(queueName);
+    index.set(task.jobId, task.id);
+  }
+
+  /**
+   * Remove a task from the dedupe index
+   */
+  private clearDedupeIndex(queueName: string, task: Task<any>): void {
+    if (!task.jobId) return;
+    const index = this.getQueueDedupeIndex(queueName);
+    const current = index.get(task.jobId);
+    if (current === task.id) {
+      index.delete(task.jobId);
+    }
+  }
+
+  /**
+   * Find a taskId by jobId in the dedupe index
+   */
+  private getDedupeTaskId(queueName: string, jobId: string): string | undefined {
+    return this.getQueueDedupeIndex(queueName).get(jobId);
+  }
+
+  /**
+   * Find a running taskId for the jobId within a queue
+   */
+  private findRunningTaskId(queueName: string, jobId: string): string | null {
+    const runningTasks = this.currentTasks.get(queueName) || [];
+    const running = runningTasks.find((task) => task.jobId === jobId);
+    return running ? running.id : null;
+  }
+
+  /**
+   * Rebuild dedupe index from pending and delayed tasks
+   */
+  private rebuildDedupeIndex(): void {
+    this.dedupeIndex.clear();
+    for (const [queueName, tasks] of this.queues.entries()) {
+      for (const task of tasks) {
+        this.trackDedupeIndex(queueName, task);
+      }
+    }
+    for (const [, task] of this.delayedTasks.entries()) {
+      const queueName = task.queueName || 'default';
+      this.trackDedupeIndex(queueName, task);
+    }
   }
 
   /**
@@ -694,6 +826,7 @@ export class QueueService
     const delayedCount = this.delayedTasks.size;
     this.delayedTasks.clear();
     this.rateLimitState.clear();
+    this.dedupeIndex.clear();
     for (const timer of this.rateLimitTimers.values()) {
       clearTimeout(timer);
     }
@@ -729,6 +862,7 @@ export class QueueService
         delayedCount++;
       }
     }
+    this.dedupeIndex.delete(queueName);
     for (const key of this.rateLimitState.keys()) {
       if (key === queueName || key.startsWith(`${queueName}:`)) {
         this.rateLimitState.delete(key);
@@ -885,9 +1019,14 @@ export class QueueService
         this.delayedTasks.entries()
       ).map(([taskId, task]) => [taskId, this.serializeTask(task)]);
 
+      const serializableDedupeIndex = Array.from(
+        this.dedupeIndex.entries()
+      ).map(([queueName, index]) => [queueName, Array.from(index.entries())]);
+
       const state = {
         queues: serializableQueues,
         delayedTasks: serializableDelayedTasks,
+        dedupeIndex: serializableDedupeIndex,
         timestamp: new Date().toISOString(),
       };
 
@@ -1061,6 +1200,22 @@ export class QueueService
             this.processQueue(queueName);
           }
         }
+      }
+
+      if (state.dedupeIndex) {
+        this.dedupeIndex.clear();
+        for (const [queueName, entries] of state.dedupeIndex) {
+          if (!Array.isArray(entries)) continue;
+          const index = new Map<string, string>();
+          for (const [jobId, taskId] of entries) {
+            if (typeof jobId === 'string' && typeof taskId === 'string') {
+              index.set(jobId, taskId);
+            }
+          }
+          this.dedupeIndex.set(queueName, index);
+        }
+      } else {
+        this.rebuildDedupeIndex();
       }
 
       this.logger.log(`Queue state loaded from ${this.persistencePath}`);

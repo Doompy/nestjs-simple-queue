@@ -70,6 +70,7 @@ export interface Task<T> {
   id: string; // Unique task ID
   payload: T;
   jobName: string; // Job name to execute
+  jobId?: string; // Optional dedupe key
   resolve: () => void;
   reject: (reason?: any) => void;
   retries: number;
@@ -129,6 +130,7 @@ export interface ProcessorManagement {
   getTaskStatus(taskId: string): TaskStatus & { taskId: string };
   getTasksByQueue(queueName: string): Task<any>[];
   getActiveTasksByQueue(queueName: string): Task<any>[];
+  cancelByJobId(queueName: string, jobId: string): boolean;
 }
 
 /**
@@ -140,6 +142,8 @@ export interface EnqueueOptions {
   delay?: number;
   backoff?: BackoffOptions;
   timeoutMs?: number;
+  jobId?: string;
+  dedupe?: 'drop' | 'replace';
 }
 
 /**

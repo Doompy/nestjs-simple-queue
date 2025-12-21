@@ -5,6 +5,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![CI/CD Status](https://github.com/Doompy/nestjs-simple-queue/workflows/CI%2FCD%20Pipeline/badge.svg)](https://github.com/Doompy/nestjs-simple-queue/actions)
 
+A predictable, in-process job queue for NestJS — no Redis, no workers, no surprises.
+
 NestJS Simple Queue is a lightweight, in-memory task queue for NestJS services. It focuses on predictable job handling (retries, priorities, delays) while keeping the API small and easy to learn. You can start with a couple of processors and grow to multiple queues without changing your application structure.
 
 ## Features
@@ -15,6 +17,7 @@ NestJS Simple Queue is a lightweight, in-memory task queue for NestJS services. 
 - Retry backoff and per-task timeouts
 - Configurable concurrency with graceful shutdown handling
 - Event hooks for task lifecycle events (start, success, failure, cancellation)
+- JobId-based dedupe (`drop` / `replace`)
 - Per-queue rate limiting with optional group keys
 - Dead letter queue (DLQ) for failed tasks
 
@@ -209,6 +212,56 @@ QueueModule.forRoot({
 - `timeoutMs` (number) - fail the task if it runs longer than this (default: disabled)
 - `priority` (TaskPriority) - priority ordering (default: `NORMAL`)
 - `delay` (ms) - schedule the task after a delay (default: 0)
+- `jobId` (string) - dedupe key scoped to the queue (optional)
+- `dedupe` (`drop` | `replace`) - dedupe behavior when `jobId` matches (default: `drop`)
+
+## JobId dedupe
+
+Use `jobId` to dedupe pending/delayed tasks within a queue:
+
+```ts
+const taskId = await queueService.enqueue('email-queue', 'send-reset-email', payload, {
+  jobId: 'user:123:reset-password',
+  dedupe: 'replace',
+});
+```
+
+Behavior:
+
+- Dedupe applies to **pending + delayed** tasks only (not running).
+- `drop`: return the existing `taskId` and skip enqueue.
+- `replace`: cancel pending/delayed tasks with the same `jobId`, then enqueue a new one.
+- If a task with the same `jobId` is already running, enqueue behaves like `drop`.
+
+To cancel by jobId:
+
+```ts
+queueService.cancelByJobId('email-queue', 'user:123:reset-password');
+```
+
+## Delivery semantics and failure behavior
+
+This library does **not** provide exactly-once delivery. Tasks can run more
+than once (retries/timeouts), and tasks can be lost if the process crashes
+before state is persisted.
+
+Key behaviors:
+
+- A task leaves the pending queue when execution starts.
+- Success is acknowledged when the processor resolves.
+- Failure is acknowledged when the processor throws or a timeout fires.
+- `cancelTask()` removes pending or delayed tasks only; it does not interrupt running tasks.
+- During shutdown, state is saved **before** waiting for running tasks to finish, so
+  completions that happen after the save are not reflected in the persisted file.
+
+| Scenario | Behavior | Notes |
+|---|---|---|
+| Success | Task completes and resolves | Acknowledged after processor resolves |
+| Processor throws | Retries if configured; otherwise fails | Possible duplicate execution if retries occur |
+| Timeout | Task fails when timeout fires | Processor is **not** aborted; it may still run and side effects can happen |
+| `cancelTask()` | Removes pending or delayed tasks only | Running tasks continue; timeout still applies |
+| Restart with persistence | Pending/delayed tasks are restored | Running tasks are **not** restored |
+| Crash (SIGKILL/OOM) | State may not be saved | Tasks can be lost or partially executed |
 
 ## Rate limiting
 
@@ -229,6 +282,12 @@ QueueModule.forRoot({
 ```
 
 `groupKey` supports dot-notation paths (e.g. `user.id`).
+
+Rate limiting details:
+
+- Limits are applied when **starting** a task, not at enqueue time.
+- When `groupKey` is set, a missing or empty value falls back to the queue-level limiter.
+- Fairness across groups is **not** guaranteed; head-of-line blocking can happen.
 
 ## Dead letter queue (DLQ)
 
@@ -269,8 +328,25 @@ QueueModule.forRoot({
 
 - Jobs are kept in memory by default.
 - Enable persistence if jobs must survive restarts.
+- Persistence writes a single JSON file on shutdown (no file locking or atomic rename).
+- Pending and delayed tasks are persisted; running tasks are not.
 - Designed for I/O-bound background tasks.
 - Avoid long-running CPU-bound jobs.
+
+## Persistence risks and recommended setup
+
+File-based persistence is intentionally simple. Keep these limitations in mind:
+
+- **Single instance only.** Multiple processes/pods pointing to the same `persistencePath`
+  can corrupt the state file or race on writes.
+- **Crash risks.** A hard crash can skip the shutdown save, losing queued tasks.
+- **I/O cost.** Large queues make the state file large, increasing write and startup time.
+
+Recommended:
+
+- Use a local disk path per instance (do not share across pods).
+- Ensure the process can write to the directory and file permissions are locked down.
+- If you need multi-instance or strong durability, use a Redis-backed queue instead.
 
 ## Development
 

@@ -991,6 +991,159 @@ describe('QueueService (Job-based)', () => {
       });
     });
   });
+
+  describe('JobId dedupe', () => {
+    it('should drop duplicate jobId and return existing taskId', async () => {
+      const module: TestingModule = await Test.createTestingModule({
+        imports: [
+          QueueModule.forRoot({
+            concurrency: 0,
+            processors: [
+              { name: 'dedupe-job', process: jest.fn().mockResolvedValue(undefined) },
+            ],
+          }),
+        ],
+      }).compile();
+
+      const dedupeService = module.get<QueueService>(QueueService);
+
+      const firstId = await dedupeService.enqueue(
+        'dedupe-queue',
+        'dedupe-job',
+        { id: 1 },
+        { jobId: 'user:1', dedupe: 'drop' }
+      );
+      const secondId = await dedupeService.enqueue(
+        'dedupe-queue',
+        'dedupe-job',
+        { id: 2 },
+        { jobId: 'user:1', dedupe: 'drop' }
+      );
+
+      expect(secondId).toBe(firstId);
+      expect(dedupeService.getTasksByQueue('dedupe-queue')).toHaveLength(1);
+    });
+
+    it('should replace pending jobId when dedupe is replace', async () => {
+      const module: TestingModule = await Test.createTestingModule({
+        imports: [
+          QueueModule.forRoot({
+            concurrency: 0,
+            processors: [
+              { name: 'replace-job', process: jest.fn().mockResolvedValue(undefined) },
+            ],
+          }),
+        ],
+      }).compile();
+
+      const replaceService = module.get<QueueService>(QueueService);
+
+      const firstId = await replaceService.enqueue(
+        'replace-queue',
+        'replace-job',
+        { id: 1 },
+        { jobId: 'user:2', dedupe: 'drop' }
+      );
+      const secondId = await replaceService.enqueue(
+        'replace-queue',
+        'replace-job',
+        { id: 2 },
+        { jobId: 'user:2', dedupe: 'replace' }
+      );
+
+      expect(secondId).not.toBe(firstId);
+      const tasks = replaceService.getTasksByQueue('replace-queue');
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0].id).toBe(secondId);
+    });
+
+    it('should drop enqueue when jobId is already running', async () => {
+      const slowProcessor = jest
+        .fn()
+        .mockImplementation(() => new Promise((resolve) => setTimeout(resolve, 50)));
+
+      const module: TestingModule = await Test.createTestingModule({
+        imports: [
+          QueueModule.forRoot({
+            concurrency: 1,
+            processors: [{ name: 'slow-job', process: slowProcessor }],
+          }),
+        ],
+      }).compile();
+
+      const runningService = module.get<QueueService>(QueueService);
+
+      const firstId = await runningService.enqueue(
+        'running-queue',
+        'slow-job',
+        { id: 1 },
+        { jobId: 'user:3', dedupe: 'replace' }
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      const secondId = await runningService.enqueue(
+        'running-queue',
+        'slow-job',
+        { id: 2 },
+        { jobId: 'user:3', dedupe: 'replace' }
+      );
+
+      expect(secondId).toBe(firstId);
+      expect(slowProcessor).toHaveBeenCalledTimes(1);
+    });
+
+    it('should cancel pending and delayed tasks by jobId', async () => {
+      const module: TestingModule = await Test.createTestingModule({
+        imports: [
+          QueueModule.forRoot({
+            concurrency: 0,
+            processors: [
+              { name: 'cancel-job', process: jest.fn().mockResolvedValue(undefined) },
+            ],
+          }),
+        ],
+      }).compile();
+
+      const cancelService = module.get<QueueService>(QueueService);
+
+      const pendingId = await cancelService.enqueue(
+        'cancel-queue',
+        'cancel-job',
+        { id: 1 },
+        { jobId: 'user:4', dedupe: 'drop' }
+      );
+      const delayedId = await cancelService.enqueue(
+        'cancel-queue',
+        'cancel-job',
+        { id: 2 },
+        { jobId: 'user:5', delay: 1000 }
+      );
+
+      const pendingCancelled = cancelService.cancelByJobId(
+        'cancel-queue',
+        'user:4'
+      );
+      const delayedCancelled = cancelService.cancelByJobId(
+        'cancel-queue',
+        'user:5'
+      );
+
+      expect(pendingCancelled).toBe(true);
+      expect(delayedCancelled).toBe(true);
+      expect(cancelService.getTasksByQueue('cancel-queue')).toHaveLength(0);
+      expect(cancelService.getDelayedTasks()).toHaveLength(0);
+
+      const newId = await cancelService.enqueue(
+        'cancel-queue',
+        'cancel-job',
+        { id: 3 },
+        { jobId: 'user:4', dedupe: 'drop' }
+      );
+      expect(newId).not.toBe(pendingId);
+      expect(newId).not.toBe(delayedId);
+    });
+  });
 });
 
 describe('Processor Management', () => {
@@ -1428,6 +1581,84 @@ describe('Task Management', () => {
       expect(
         restoredTasks.every((task) => task.queueName === 'persist-queue')
       ).toBe(true);
+
+      if (fs.existsSync(persistencePath)) {
+        fs.unlinkSync(persistencePath);
+      }
+    });
+
+    it('should restore jobId dedupe index from saved state', async () => {
+      const persistencePath = path.join(
+        os.tmpdir(),
+        `queue-state-dedupe-${Date.now()}.json`
+      );
+
+      const processors: QueueProcessor[] = [
+        {
+          name: 'dedupe-persisted',
+          process: jest.fn().mockResolvedValue(undefined),
+        },
+      ];
+
+      const mockLogger = {
+        log: jest.fn(),
+        error: jest.fn(),
+        warn: jest.fn(),
+        debug: jest.fn(),
+        verbose: jest.fn(),
+      };
+
+      const pendingModule: TestingModule = await Test.createTestingModule({
+        imports: [
+          QueueModule.forRoot({
+            processors,
+            enablePersistence: true,
+            persistencePath,
+            concurrency: 0,
+            logger: mockLogger as any,
+          }),
+        ],
+      }).compile();
+
+      const pendingService = pendingModule.get<QueueService>(QueueService);
+
+      await pendingService.enqueue(
+        'dedupe-queue',
+        'dedupe-persisted',
+        { id: 1 },
+        { jobId: 'user:dedupe' }
+      );
+
+      await (pendingService as any).savePersistedState();
+
+      const restoreModule: TestingModule = await Test.createTestingModule({
+        imports: [
+          QueueModule.forRoot({
+            processors,
+            enablePersistence: true,
+            persistencePath,
+            concurrency: 0,
+            logger: mockLogger as any,
+          }),
+        ],
+      }).compile();
+
+      const restoreService = restoreModule.get<QueueService>(QueueService);
+      await restoreService.onModuleInit();
+
+      const restoredTasks = restoreService.getTasksByQueue('dedupe-queue');
+      expect(restoredTasks).toHaveLength(1);
+      const restoredId = restoredTasks[0].id;
+
+      const dedupedId = await restoreService.enqueue(
+        'dedupe-queue',
+        'dedupe-persisted',
+        { id: 2 },
+        { jobId: 'user:dedupe', dedupe: 'drop' }
+      );
+
+      expect(dedupedId).toBe(restoredId);
+      expect(restoreService.getTasksByQueue('dedupe-queue')).toHaveLength(1);
 
       if (fs.existsSync(persistencePath)) {
         fs.unlinkSync(persistencePath);
