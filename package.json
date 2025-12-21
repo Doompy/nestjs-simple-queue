@@ -1,6 +1,6 @@
 {
   "name": "nestjs-simple-queue",
-  "version": "3.2.2",
+  "version": "3.2.3",
   "description": "A predictable, in-process job queue for NestJS — no Redis, no workers, no surprises.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -18,8 +18,7 @@
     "test:coverage": "jest --coverage --silent",
     "lint": "cross-env ESLINT_USE_FLAT_CONFIG=false eslint src/**/*.ts",
     "lint:fix": "cross-env ESLINT_USE_FLAT_CONFIG=false eslint src/**/*.ts --fix",
-    "clean": "rimraf dist",
-    "prepare": "npm run build"
+    "clean": "rimraf dist"
   },
   "keywords": [
     "nestjs",
@@ -27,6 +26,8 @@
     "nestjs queue",
     "queue",
     "job queue",
+    "background job",
+    "scheduler",
     "background jobs",
     "task queue",
     "in-memory queue",
@@ -83,6 +84,7 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
       "default": "./dist/index.js"
     }
   },
