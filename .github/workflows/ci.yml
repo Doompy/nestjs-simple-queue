@@ -46,7 +46,7 @@ jobs:
       - name: Upload coverage reports
         uses: codecov/codecov-action@v5
         with:
-          file: ./coverage/lcov.info
+          files: ./coverage/lcov.info
           flags: unittests
           name: codecov-umbrella
           fail_ci_if_error: false
@@ -67,8 +67,8 @@ jobs:
           node-version: '24.x'
           cache: 'npm'
 
-      - name: Use npm 10
-        run: npm i -g npm@10
+      - name: Use npm (OIDC compatible)
+        run: npm i -g npm@^11.5.1
 
       - name: Install dependencies
         run: npm ci --omit=optional
