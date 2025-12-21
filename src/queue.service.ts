@@ -1,4 +1,4 @@
-﻿import {
+import {
   Injectable,
   Inject,
   Logger,
@@ -496,7 +496,10 @@ export class QueueService
   /**
    * Find a taskId by jobId in the dedupe index
    */
-  private getDedupeTaskId(queueName: string, jobId: string): string | undefined {
+  private getDedupeTaskId(
+    queueName: string,
+    jobId: string
+  ): string | undefined {
     return this.getQueueDedupeIndex(queueName).get(jobId);
   }
 

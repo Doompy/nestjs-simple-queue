@@ -1,4 +1,4 @@
-﻿import { Test, TestingModule } from '@nestjs/testing';
+import { Test, TestingModule } from '@nestjs/testing';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { QueueService } from './queue.service';
 import { QueueModule } from './queue.module';
@@ -999,7 +999,10 @@ describe('QueueService (Job-based)', () => {
           QueueModule.forRoot({
             concurrency: 0,
             processors: [
-              { name: 'dedupe-job', process: jest.fn().mockResolvedValue(undefined) },
+              {
+                name: 'dedupe-job',
+                process: jest.fn().mockResolvedValue(undefined),
+              },
             ],
           }),
         ],
@@ -1030,7 +1033,10 @@ describe('QueueService (Job-based)', () => {
           QueueModule.forRoot({
             concurrency: 0,
             processors: [
-              { name: 'replace-job', process: jest.fn().mockResolvedValue(undefined) },
+              {
+                name: 'replace-job',
+                process: jest.fn().mockResolvedValue(undefined),
+              },
             ],
           }),
         ],
@@ -1060,7 +1066,9 @@ describe('QueueService (Job-based)', () => {
     it('should drop enqueue when jobId is already running', async () => {
       const slowProcessor = jest
         .fn()
-        .mockImplementation(() => new Promise((resolve) => setTimeout(resolve, 50)));
+        .mockImplementation(
+          () => new Promise((resolve) => setTimeout(resolve, 50))
+        );
 
       const module: TestingModule = await Test.createTestingModule({
         imports: [
@@ -1099,7 +1107,10 @@ describe('QueueService (Job-based)', () => {
           QueueModule.forRoot({
             concurrency: 0,
             processors: [
-              { name: 'cancel-job', process: jest.fn().mockResolvedValue(undefined) },
+              {
+                name: 'cancel-job',
+                process: jest.fn().mockResolvedValue(undefined),
+              },
             ],
           }),
         ],

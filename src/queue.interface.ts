@@ -1,4 +1,4 @@
-﻿import { Logger } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 
 /**
  * Options passed by library users through QueueModule.forRoot()
