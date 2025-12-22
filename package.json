@@ -55,7 +55,7 @@
     "@nestjs/common": "^11.1.6",
     "@nestjs/event-emitter": "^3.0.1",
     "@nestjs/testing": "^11.1.6",
-    "@types/jest": "^29.5.12",
+    "@types/jest": "^30.0.0",
     "@types/node": "^25.0.2",
     "@typescript-eslint/eslint-plugin": "^8.43.0",
     "@typescript-eslint/parser": "^8.43.0",
